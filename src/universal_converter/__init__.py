@@ -662,6 +662,556 @@ def equation_to_latex(equation: str) -> str:
     return latex
 
 
+# ============ GEOSPATIAL / GIS CONVERSIONS ============
+
+def geojson_to_dict(geojson_path: str) -> Dict:
+    """Read GeoJSON file to dictionary"""
+    with open(geojson_path, 'r') as f:
+        return json.load(f)
+
+
+def dict_to_geojson(data: Dict, output_path: str = None) -> str:
+    """Convert dictionary to GeoJSON"""
+    geojson_str = json.dumps(data, indent=2)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(geojson_str)
+    
+    return geojson_str
+
+
+def coordinates_to_geojson(lat: float, lon: float, properties: Dict = None) -> Dict:
+    """Convert coordinates to GeoJSON Point"""
+    feature = {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [lon, lat]
+        },
+        "properties": properties or {}
+    }
+    return feature
+
+
+def geojson_to_kml(geojson_path: str, output_path: str = None) -> str:
+    """Convert GeoJSON to KML"""
+    with open(geojson_path, 'r') as f:
+        geojson = json.load(f)
+    
+    kml_lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+                '<kml xmlns="http://www.opengis.net/kml/2.2">',
+                '<Document>']
+    
+    if geojson.get('type') == 'FeatureCollection':
+        for feature in geojson.get('features', []):
+            if feature.get('geometry', {}).get('type') == 'Point':
+                coords = feature['geometry']['coordinates']
+                name = feature.get('properties', {}).get('name', 'Unnamed')
+                kml_lines.append(f'<Placemark><name>{name}</name><Point><coordinates>{coords[0]},{coords[1]}</coordinates></Point></Placemark>')
+    
+    kml_lines.extend(['</Document>', '</kml>'])
+    kml_str = '\n'.join(kml_lines)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(kml_str)
+    
+    return kml_str
+
+
+def kml_to_geojson(kml_path: str) -> Dict:
+    """Convert KML to GeoJSON"""
+    import re
+    
+    with open(kml_path, 'r') as f:
+        kml_content = f.read()
+    
+    features = []
+    placemarks = re.findall(r'<Placemark>(.*?)</Placemark>', kml_content, re.DOTALL)
+    
+    for placemark in placemarks:
+        name_match = re.search(r'<name>(.*?)</name>', placemark)
+        coords_match = re.search(r'<coordinates>(.*?)</coordinates>', placemark)
+        
+        if coords_match:
+            coords = coords_match.group(1).split(',')
+            feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [float(coords[0]), float(coords[1])]
+                },
+                "properties": {
+                    "name": name_match.group(1) if name_match else "Unnamed"
+                }
+            }
+            features.append(feature)
+    
+    return {"type": "FeatureCollection", "features": features}
+
+
+def shapefile_to_geojson(shp_path: str) -> Dict:
+    """Convert Shapefile to GeoJSON"""
+    try:
+        import geopandas as gpd
+    except ImportError:
+        raise ConversionError("geopandas required: pip install geopandas")
+    
+    gdf = gpd.read_file(shp_path)
+    return json.loads(gdf.to_json())
+
+
+def wkt_to_geojson(wkt_string: str) -> Dict:
+    """Convert WKT to GeoJSON"""
+    try:
+        from shapely import wkt
+        from shapely.geometry import mapping
+    except ImportError:
+        raise ConversionError("shapely required: pip install shapely")
+    
+    geom = wkt.loads(wkt_string)
+    return mapping(geom)
+
+
+def geojson_to_wkt(geojson: Dict) -> str:
+    """Convert GeoJSON to WKT"""
+    try:
+        from shapely.geometry import shape
+    except ImportError:
+        raise ConversionError("shapely required: pip install shapely")
+    
+    geom = shape(geojson)
+    return geom.wkt
+
+
+# ============ FONT CONVERSIONS ============
+
+def ttf_to_base64(font_path: str) -> str:
+    """Convert TTF font to base64"""
+    with open(font_path, 'rb') as f:
+        return base64.b64encode(f.read()).decode('utf-8')
+
+
+def base64_to_ttf(base64_str: str, output_path: str) -> str:
+    """Convert base64 to TTF font file"""
+    with open(output_path, 'wb') as f:
+        f.write(base64.b64decode(base64_str))
+    return output_path
+
+
+def list_font_info(font_path: str) -> Dict:
+    """Get font information"""
+    try:
+        from fontTools.ttLib import TTFont
+    except ImportError:
+        raise ConversionError("fonttools required: pip install fonttools")
+    
+    font = TTFont(font_path)
+    return {
+        'family_name': font['name'].getNameByID(1),
+        'style_name': font['name'].getNameByID(2),
+        'version': font['name'].getNameID(5),
+        'glyph_count': len(font.getGlyphSet()),
+    }
+
+
+# ============ 3D MODEL CONVERSIONS ============
+
+def obj_to_stl(obj_path: str, output_path: str = None) -> str:
+    """Convert OBJ to STL"""
+    try:
+        import trimesh
+    except ImportError:
+        raise ConversionError("trimesh required: pip install trimesh")
+    
+    mesh = trimesh.load(obj_path)
+    
+    if output_path is None:
+        output_path = obj_path.rsplit('.', 1)[0] + '.stl'
+    
+    mesh.export(output_path)
+    return output_path
+
+
+def stl_to_obj(stl_path: str, output_path: str = None) -> str:
+    """Convert STL to OBJ"""
+    try:
+        import trimesh
+    except ImportError:
+        raise ConversionError("trimesh required: pip install trimesh")
+    
+    mesh = trimesh.load(stl_path)
+    
+    if output_path is None:
+        output_path = stl_path.rsplit('.', 1)[0] + '.obj'
+    
+    mesh.export(output_path)
+    return output_path
+
+
+def gltf_to_obj(gltf_path: str, output_path: str = None) -> str:
+    """Convert GLTF to OBJ"""
+    try:
+        import trimesh
+    except ImportError:
+        raise ConversionError("trimesh required: pip install trimesh")
+    
+    mesh = trimesh.load(gltf_path)
+    
+    if output_path is None:
+        output_path = gltf_path.rsplit('.', 1)[0] + '.obj'
+    
+    mesh.export(output_path)
+    return output_path
+
+
+def mesh_to_stl(mesh_data: Dict, output_path: str = None) -> str:
+    """Convert mesh data to STL"""
+    try:
+        import trimesh
+    except ImportError:
+        raise ConversionError("trimesh required: pip install trimesh")
+    
+    vertices = mesh_data.get('vertices', [])
+    faces = mesh_data.get('faces', [])
+    
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+    
+    if output_path is None:
+        output_path = "mesh.stl"
+    
+    mesh.export(output_path)
+    return output_path
+
+
+# ============ CALENDAR CONVERSIONS ============
+
+def ics_to_dict(ics_path: str) -> Dict:
+    """Parse ICS calendar file to dictionary"""
+    with open(ics_path, 'r') as f:
+        content = f.read()
+    
+    events = []
+    current_event = {}
+    in_event = False
+    
+    for line in content.split('\n'):
+        if line.startswith('BEGIN:VEVENT'):
+            in_event = True
+            current_event = {}
+        elif line.startswith('END:VEVENT'):
+            in_event = False
+            events.append(current_event)
+        elif in_event:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                current_event[key] = value
+    
+    return {'events': events}
+
+
+def dict_to_ics(events: List[Dict], output_path: str = None, calendar_name: str = "Calendar") -> str:
+    """Convert dictionary to ICS calendar format"""
+    ics_lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Universal Converter//EN',
+        f'X-WR-CALNAME:{calendar_name}'
+    ]
+    
+    for event in events:
+        ics_lines.append('BEGIN:VEVENT')
+        if 'summary' in event:
+            ics_lines.append(f"SUMMARY:{event['summary']}")
+        if 'description' in event:
+            ics_lines.append(f"DESCRIPTION:{event['description']}")
+        if 'dtstart' in event:
+            ics_lines.append(f"DTSTART:{event['dtstart']}")
+        if 'dtend' in event:
+            ics_lines.append(f"DTEND:{event['dtend']}")
+        if 'location' in event:
+            ics_lines.append(f"LOCATION:{event['location']}")
+        ics_lines.append('END:VEVENT')
+    
+    ics_lines.append('END:VCALENDAR')
+    ics_str = '\n'.join(ics_lines)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(ics_str)
+    
+    return ics_str
+
+
+# ============ EMAIL CONVERSIONS ============
+
+def eml_to_text(eml_path: str) -> str:
+    """Convert EML email to plain text"""
+    try:
+        from email import policy
+        from email.parser import Parser
+    except ImportError:
+        raise ConversionError("Python email module required")
+    
+    with open(eml_path, 'r') as f:
+        msg = Parser(policy=policy.default).parse(f)
+    
+    text = f"Subject: {msg['subject']}\n"
+    text += f"From: {msg['from']}\n"
+    text += f"To: {msg['to']}\n"
+    text += f"Date: {msg['date']}\n\n"
+    
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == "text/plain":
+                text += part.get_content()
+                break
+    else:
+        text += msg.get_content()
+    
+    return text
+
+
+def eml_to_dict(eml_path: str) -> Dict:
+    """Convert EML email to dictionary"""
+    try:
+        from email import policy
+        from email.parser import Parser
+    except ImportError:
+        raise ConversionError("Python email module required")
+    
+    with open(eml_path, 'r') as f:
+        msg = Parser(policy=policy.default).parse(f)
+    
+    return {
+        'subject': msg['subject'],
+        'from': msg['from'],
+        'to': msg['to'],
+        'date': msg['date'],
+        'body': msg.get_content() if not msg.is_multipart() else str(msg),
+    }
+
+
+def msg_to_text(msg_path: str) -> str:
+    """Convert MSG email to plain text"""
+    try:
+        from extract_msg import Message
+    except ImportError:
+        raise ConversionError("extract-msg required: pip install extract-msg")
+    
+    msg = Message(msg_path)
+    return f"Subject: {msg.subject}\nFrom: {msg.sender}\n\n{msg.body}"
+
+
+# ============ FINANCE / TRADING CONVERSIONS ============
+
+def csv_to_trading_view(csv_path: str, output_path: str = None) -> str:
+    """Convert CSV to TradingView format"""
+    try:
+        import pandas as pd
+    except ImportError:
+        raise ConversionError("pandas required: pip install pandas")
+    
+    df = pd.read_csv(csv_path)
+    
+    tv_format = "datetime,open,high,low,close,volume\n"
+    for _, row in df.iterrows():
+        tv_format += f"{row.iloc[0]},{row.iloc[1]},{row.iloc[2]},{row.iloc[3]},{row.iloc[4]},{row.iloc[5]}\n"
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(tv_format)
+    
+    return tv_format
+
+
+def crypto_to_csv(crypto_data: List[Dict], output_path: str = None) -> str:
+    """Convert crypto API data to CSV"""
+    if not crypto_data:
+        return ""
+    
+    keys = crypto_data[0].keys()
+    lines = [','.join(keys)]
+    
+    for item in crypto_data:
+        lines.append(','.join(str(item.get(k, '')) for k in keys))
+    
+    csv_str = '\n'.join(lines)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(csv_str)
+    
+    return csv_str
+
+
+# ============ CONFIGURATION FILE CONVERSIONS ============
+
+def env_to_dict(env_path: str) -> Dict:
+    """Parse .env file to dictionary"""
+    config = {}
+    
+    with open(env_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    config[key.strip()] = value.strip().strip('"').strip("'")
+    
+    return config
+
+
+def dict_to_env(data: Dict, output_path: str = None) -> str:
+    """Convert dictionary to .env format"""
+    lines = []
+    for key, value in data.items():
+        if ' ' in str(value):
+            lines.append(f'{key}="{value}"')
+        else:
+            lines.append(f'{key}={value}')
+    
+    env_str = '\n'.join(lines)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(env_str)
+    
+    return env_str
+
+
+def properties_to_dict(properties_path: str) -> Dict:
+    """Parse Java properties file to dictionary"""
+    config = {}
+    
+    with open(properties_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and not line.startswith('!'):
+                if '=' in line or ':' in line:
+                    sep = '=' if '=' in line else ':'
+                    key, value = line.split(sep, 1)
+                    config[key.strip()] = value.strip()
+    
+    return config
+
+
+def dict_to_properties(data: Dict, output_path: str = None) -> str:
+    """Convert dictionary to Java properties format"""
+    lines = []
+    for key, value in data.items():
+        lines.append(f"{key}={value}")
+    
+    props_str = '\n'.join(lines)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(props_str)
+    
+    return props_str
+
+
+def json_to_env(json_path: str, output_path: str = None) -> str:
+    """Convert JSON to .env format"""
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+    
+    return dict_to_env(data, output_path)
+
+
+def env_to_json(env_path: str, output_path: str = None) -> str:
+    """Convert .env to JSON format"""
+    data = env_to_dict(env_path)
+    json_str = json.dumps(data, indent=2)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(json_str)
+    
+    return json_str
+
+
+# ============ NETWORK / PACKET CAPTURE ============
+
+def pcap_to_json(pcap_path: str) -> List[Dict]:
+    """Convert PCAP file to JSON"""
+    try:
+        from scapy.all import rdpcap, IP, TCP, UDP
+    except ImportError:
+        raise ConversionError("scapy required: pip install scapy")
+    
+    packets = rdpcap(pcap_path)
+    results = []
+    
+    for pkt in packets:
+        if IP in pkt:
+            packet_info = {
+                'src': pkt[IP].src,
+                'dst': pkt[IP].dst,
+                'protocol': pkt[IP].proto,
+                'len': pkt[IP].len
+            }
+            
+            if TCP in pkt:
+                packet_info['sport'] = pkt[TCP].sport
+                packet_info['dport'] = pkt[TCP].dport
+            elif UDP in pkt:
+                packet_info['sport'] = pkt[UDP].sport
+                packet_info['dport'] = pkt[UDP].dport
+            
+            results.append(packet_info)
+    
+    return results
+
+
+# ============ PROTOCOL BUFFERS / FLATBUFFERS ============
+
+def protobuf_to_dict(pb_path: str, proto_file: str = None) -> Dict:
+    """Parse Protocol Buffer to dictionary"""
+    try:
+        from google.protobuf import descriptor_pb2
+        from google.protobuf.internal.decoder import _DecodeVarint32
+    except ImportError:
+        raise ConversionError("protobuf required: pip install protobuf")
+    
+    with open(pb_path, 'rb') as f:
+        data = f.read()
+    
+    return {"raw": base64.b64encode(data).decode()}
+
+
+def dict_to_json_schema(data: Dict, output_path: str = None) -> str:
+    """Generate JSON Schema from dictionary"""
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+    }
+    
+    for key, value in data.items():
+        if isinstance(value, bool):
+            schema["properties"][key] = {"type": "boolean"}
+        elif isinstance(value, int):
+            schema["properties"][key] = {"type": "integer"}
+        elif isinstance(value, float):
+            schema["properties"][key] = {"type": "number"}
+        elif isinstance(value, str):
+            schema["properties"][key] = {"type": "string"}
+        elif isinstance(value, list):
+            schema["properties"][key] = {"type": "array"}
+        elif isinstance(value, dict):
+            schema["properties"][key] = {"type": "object"}
+    
+    json_str = json.dumps(schema, indent=2)
+    
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(json_str)
+    
+    return json_str
+
+
 # ============ MAIN CLI ============
 
 def main():

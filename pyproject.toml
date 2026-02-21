@@ -77,6 +77,13 @@ dependencies = [
     "redis",
     "paho-mqtt",
     "pyx12",
+    "geopandas",
+    "shapely",
+    "trimesh",
+    "fonttools",
+    "scapy",
+    "protobuf",
+    "extract-msg",
 ]
 
 [project.optional-dependencies]
