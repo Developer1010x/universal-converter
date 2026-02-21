@@ -241,13 +241,50 @@ KEY FEATURES
 ================================================================================
 
 ✓ 100+ conversion functions
-✓ 50+ dependencies (auto-installed)
-✓ OS-neutral (Windows, Mac, Linux)
-✓ Auto-installs missing packages on import
+✓ Optional dependencies (no auto-install on import)
+✓ Safe temp file management
+✓ Helpful error messages with install instructions
 ✓ Simple Python API
 ✓ Command line interface
 ✓ Batch conversion support
-✓ Error handling with informative messages
+✓ OS-neutral (Windows, Mac, Linux)
+
+================================================================================
+INSTALLATION
+================================================================================
+
+# Core (no dependencies)
+pip install universal-converter
+
+# Specific features
+pip install universal-converter[images]     # Image conversions
+pip install universal-converter[audio]       # Audio conversions
+pip install universal-converter[video]       # Video conversions
+pip install universal-converter[cloud]       # Cloud storage
+pip install universal-converter[ai]         # AI/NLP features
+pip install universal-converter[all]        # All features
+
+================================================================================
+ARCHITECTURE IMPROVEMENTS
+================================================================================
+
+1. Removed auto-install on import (security fix)
+   - No more silent pip install calls
+   - Helpful DependencyError with installation instructions
+
+2. Optional dependency groups in pyproject.toml
+   - images, audio, video, cloud, ai, etc.
+   - Users only install what they need
+
+3. Safe temp file management
+   - contextmanager for guaranteed cleanup
+   - Prevents temp file leaks
+
+4. Proper error handling
+   - ConversionError for conversion failures
+   - DependencyError for missing packages
+
+5. Type annotations added
 
 ================================================================================
 PUBLISH TO PYPI
@@ -262,5 +299,8 @@ twine upload dist/*
 
 # After publish
 pip install universal-converter
+
+# With specific features
+pip install universal-converter[images]
 
 ================================================================================
