@@ -466,6 +466,8 @@ class UniversalConverter:
                 return self._convert_database(input_path, output_path, from_fmt, to_fmt)
             
             return ConversionResult(success=False, error=f"Unsupported: {from_fmt} → {to_fmt}")
+        except Exception as e:
+            return ConversionResult(success=False, error=str(e))
     
     def _convert_database(self, input_path: str, output_path: str, from_fmt: str, to_fmt: str) -> ConversionResult:
         try:
@@ -824,8 +826,599 @@ def _get_format_category(fmt: str) -> str:
     if fmt in c.IMAGE_FORMATS: return 'image'
     if fmt in c.ARCHIVE_FORMATS: return 'archive'
     if fmt in c.CODE_FORMATS: return 'code'
+    if fmt in c.DATABASE_FORMATS: return 'database'
     return 'unknown'
 
+
+# ============ ENCODING CONVERSIONS ============
+
+def encode_base64(data: Union[str, bytes]) -> str:
+    """Encode string or bytes to Base64"""
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    return base64.b64encode(data).decode('utf-8')
+
+
+def decode_base64(data: str) -> str:
+    """Decode Base64 to string"""
+    return base64.b64decode(data).decode('utf-8')
+
+
+def encode_hex(data: Union[str, bytes]) -> str:
+    """Encode string or bytes to Hex"""
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    return data.hex()
+
+
+def decode_hex(data: str) -> str:
+    """Decode Hex to string"""
+    return bytes.fromhex(data).decode('utf-8')
+
+
+def encode_url(data: str) -> str:
+    """URL encode a string"""
+    from urllib.parse import quote
+    return quote(data)
+
+
+def decode_url(data: str) -> str:
+    """URL decode a string"""
+    from urllib.parse import unquote
+    return unquote(data)
+
+
+def encode_html(data: str) -> str:
+    """HTML encode a string"""
+    return (data.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+                .replace("'", '&#39;'))
+
+
+def decode_html(data: str) -> str:
+    """HTML decode a string"""
+    import html
+    return html.unescape(data)
+
+
+# ============ COLOR CONVERSIONS ============
+
+def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
+    """Convert HEX color to RGB tuple"""
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) == 3:
+        hex_color = ''.join(c*2 for c in hex_color)
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+
+def rgb_to_hex(r: int, g: int, b: int) -> str:
+    """Convert RGB to HEX color"""
+    return f'#{r:02x}{g:02x}{b:02x}'
+
+
+def rgb_to_hsl(r: int, g: int, b: int) -> Tuple[float, float, float]:
+    """Convert RGB to HSL"""
+    r, g, b = r/255, g/255, b/255
+    max_c = max(r, g, b)
+    min_c = min(r, g, b)
+    l = (max_c + min_c) / 2
+    
+    if max_c == min_c:
+        h = s = 0
+    else:
+        d = max_c - min_c
+        s = d / (2 - max_c - min_c) if l > 0.5 else d / (max_c + min_c)
+        if max_c == r:
+            h = ((g - b) / d + (6 if g < b else 0)) / 6
+        elif max_c == g:
+            h = ((b - r) / d + 2) / 6
+        else:
+            h = ((r - g) / d + 4) / 6
+    return round(h * 360, 1), round(s * 100, 1), round(l * 100, 1)
+
+
+def hsl_to_rgb(h: float, s: float, l: float) -> Tuple[int, int, int]:
+    """Convert HSL to RGB"""
+    h, s, l = h/360, s/100, l/100
+    
+    if s == 0:
+        val = round(l * 255)
+        return (val, val, val)
+    
+    def hue_to_rgb(p, q, t):
+        if t < 0: t += 1
+        if t > 1: t -= 1
+        if t < 1/6: return p + (q - p) * 6 * t
+        if t < 1/2: return q
+        if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+        return p
+    
+    q = l * (1 + s) if l < 0.5 else l + s - l * s
+    p = 2 * l - q
+    r = round(hue_to_rgb(p, q, h + 1/3) * 255)
+    g = round(hue_to_rgb(p, q, h) * 255)
+    b = round(hue_to_rgb(p, q, h - 1/3) * 255)
+    return (r, g, b)
+
+
+def convert_color(color: str, to_format: str) -> Any:
+    """Convert between color formats (hex, rgb, hsl)"""
+    color = color.strip().lower()
+    
+    if to_format == 'hex':
+        if color.startswith('rgb'):
+            match = re.match(r'rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', color)
+            if match:
+                return rgb_to_hex(int(match[1]), int(match[2]), int(match[3]))
+        elif color.startswith('hsl'):
+            match = re.match(r'hsl\s*\(\s*(\d+)\s*,\s*(\d+)%?\s*,\s*(\d+)%?\s*\)', color)
+            if match:
+                rgb = hsl_to_rgb(int(match[1]), int(match[2]), int(match[3]))
+                return rgb_to_hex(*rgb)
+        return color if color.startswith('#') else color
+    
+    if to_format == 'rgb':
+        if color.startswith('#'):
+            rgb = hex_to_rgb(color)
+            return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
+        elif color.startswith('hsl'):
+            match = re.match(r'hsl\s*\(\s*(\d+)\s*,\s*(\d+)%?\s*,\s*(\d+)%?\s*\)', color)
+            if match:
+                rgb = hsl_to_rgb(int(match[1]), int(match[2]), int(match[3]))
+                return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
+    
+    if to_format == 'hsl':
+        if color.startswith('#'):
+            rgb = hex_to_rgb(color)
+            hsl = rgb_to_hsl(*rgb)
+            return f"hsl({hsl[0]}, {hsl[1]}%, {hsl[2]}%)"
+        elif color.startswith('rgb'):
+            match = re.match(r'rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', color)
+            if match:
+                hsl = rgb_to_hsl(int(match[1]), int(match[2]), int(match[3]))
+                return f"hsl({hsl[0]}, {hsl[1]}%, {hsl[2]}%)"
+    
+    return None
+
+
+# ============ DATE/TIME CONVERSIONS ============
+
+def timestamp_to_iso(timestamp: Union[int, float], utc: bool = False) -> str:
+    """Convert Unix timestamp to ISO format"""
+    dt = datetime.fromtimestamp(timestamp, datetime.timezone.utc if utc else None)
+    return dt.isoformat()
+
+
+def iso_to_timestamp(iso_str: str) -> float:
+    """Convert ISO string to Unix timestamp"""
+    dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+    return dt.timestamp()
+
+
+def timestamp_to_human(timestamp: Union[int, float], format_str: str = '%Y-%m-%d %H:%M:%S') -> str:
+    """Convert Unix timestamp to human readable format"""
+    dt = datetime.fromtimestamp(timestamp)
+    return dt.strftime(format_str)
+
+
+def human_to_timestamp(date_str: str, format_str: str = '%Y-%m-%d %H:%M:%S') -> float:
+    """Convert human readable date to Unix timestamp"""
+    dt = datetime.strptime(date_str, format_str)
+    return dt.timestamp()
+
+
+def convert_date(date_str: str, from_format: str, to_format: str) -> str:
+    """Convert between date formats"""
+    dt = datetime.strptime(date_str, from_format)
+    return dt.strftime(to_format)
+
+
+def get_current_timestamp() -> int:
+    """Get current Unix timestamp"""
+    return int(datetime.now().timestamp())
+
+
+def get_current_iso() -> str:
+    """Get current ISO timestamp"""
+    return datetime.now().isoformat()
+
+
+# ============ CASE CONVERSIONS ============
+
+def to_camel_case(text: str) -> str:
+    """Convert to camelCase"""
+    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    words = text.split()
+    if not words: return text
+    return words[0].lower() + ''.join(word.capitalize() for word in words[1:])
+
+
+def to_pascal_case(text: str) -> str:
+    """Convert to PascalCase"""
+    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    words = text.split()
+    return ''.join(word.capitalize() for word in words)
+
+
+def to_snake_case(text: str) -> str:
+    """Convert to snake_case"""
+    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    return '_'.join(word.lower() for word in text.split())
+
+
+def to_kebab_case(text: str) -> str:
+    """Convert to kebab-case"""
+    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    return '-'.join(word.lower() for word in text.split())
+
+
+def to_screaming_snake_case(text: str) -> str:
+    """Convert to SCREAMING_SNAKE_CASE"""
+    return to_snake_case(text).upper()
+
+
+def to_sentence_case(text: str) -> str:
+    """Convert to Sentence case"""
+    text = text.lower().strip()
+    return text[0].upper() + text[1:] if text else text
+
+
+def convert_case(text: str, to_case: str) -> str:
+    """Convert between case formats"""
+    cases = {
+        'camel': to_camel_case,
+        'pascal': to_pascal_case,
+        'snake': to_snake_case,
+        'kebab': to_kebab_case,
+        'screaming': to_screaming_snake_case,
+        'sentence': to_sentence_case,
+    }
+    converter = cases.get(to_case.lower())
+    return converter(text) if converter else text
+
+
+# ============ UNIT CONVERSIONS ============
+
+UNITS = {
+    'length': {
+        'm': 1.0, 'meter': 1.0, 'meters': 1.0,
+        'km': 1000.0, 'kilometer': 1000.0,
+        'cm': 0.01, 'centimeter': 0.01,
+        'mm': 0.001, 'millimeter': 0.001,
+        'mi': 1609.344, 'mile': 1609.344,
+        'yd': 0.9144, 'yard': 0.9144,
+        'ft': 0.3048, 'foot': 0.3048, 'feet': 0.3048,
+        'in': 0.0254, 'inch': 0.0254,
+    },
+    'weight': {
+        'kg': 1.0, 'kilogram': 1.0, 'kilograms': 1.0,
+        'g': 0.001, 'gram': 0.001, 'grams': 0.001,
+        'mg': 0.000001, 'milligram': 0.000001,
+        'lb': 0.453592, 'pound': 0.453592, 'pounds': 0.453592,
+        'oz': 0.0283495, 'ounce': 0.0283495,
+    },
+    'temperature': {
+        'c': 1.0, 'celsius': 1.0,
+        'f': 1.0, 'fahrenheit': 1.0,
+        'k': 1.0, 'kelvin': 1.0,
+    },
+    'volume': {
+        'l': 1.0, 'liter': 1.0, 'liters': 1.0,
+        'ml': 0.001, 'milliliter': 0.001,
+        'gal': 3.78541, 'gallon': 3.78541,
+        'qt': 0.946353, 'quart': 0.946353,
+        'pt': 0.473176, 'pint': 0.473176,
+        'cup': 0.236588, 'cup': 0.236588,
+        'fl oz': 0.0295735, 'fluid ounce': 0.0295735,
+    },
+    'data': {
+        'b': 1.0, 'byte': 1.0, 'bytes': 1.0,
+        'kb': 1024.0, 'kilobyte': 1024.0,
+        'mb': 1048576.0, 'megabyte': 1048576.0,
+        'gb': 1073741824.0, 'gigabyte': 1073741824.0,
+        'tb': 1099511627776.0, 'terabyte': 1099511627776.0,
+    },
+}
+
+
+def _get_unit_type(unit: str) -> str:
+    """Detect unit type"""
+    unit = unit.lower()
+    for utype, units in UNITS.items():
+        if unit in units:
+            return utype
+    return None
+
+
+def convert_unit(value: float, from_unit: str, to_unit: str) -> Optional[float]:
+    """Convert between units"""
+    from_unit = from_unit.lower()
+    to_unit = to_unit.lower()
+    
+    unit_type = _get_unit_type(from_unit)
+    if not unit_type or _get_unit_type(to_unit) != unit_type:
+        return None
+    
+    if unit_type == 'temperature':
+        if from_unit in ('c', 'celsius'):
+            c = value
+        elif from_unit in ('f', 'fahrenheit'):
+            c = (value - 32) * 5/9
+        else:
+            c = value - 273.15
+        
+        if to_unit in ('c', 'celsius'):
+            return c
+        elif to_unit in ('f', 'fahrenheit'):
+            return c * 9/5 + 32
+        else:
+            return c + 273.15
+    
+    base_value = value * UNITS[unit_type][from_unit]
+    return base_value / UNITS[unit_type][to_unit]
+
+
+# ============ HASH FUNCTIONS ============
+
+def hash_string(text: str, algorithm: str = 'sha256') -> str:
+    """Hash a string"""
+    h = hashlib.new(algorithm)
+    h.update(text.encode('utf-8'))
+    return h.hexdigest()
+
+
+def hash_file_md5(file_path: str) -> str:
+    """MD5 hash of file"""
+    return hash_file(file_path, 'md5')
+
+
+def hash_file_sha1(file_path: str) -> str:
+    """SHA1 hash of file"""
+    return hash_file(file_path, 'sha1')
+
+
+def hash_file_sha256(file_path: str) -> str:
+    """SHA256 hash of file"""
+    return hash_file(file_path, 'sha256')
+
+
+def verify_hash(file_path: str, expected_hash: str, algorithm: str = 'sha256') -> bool:
+    """Verify file hash"""
+    actual = hash_file(file_path, algorithm)
+    return actual.lower() == expected_hash.lower()
+
+
+# ============ SERIALIZATION ============
+
+def to_pickle(obj: Any) -> bytes:
+    """Serialize to Pickle"""
+    import pickle
+    return pickle.dumps(obj)
+
+
+def from_pickle(data: bytes) -> Any:
+    """Deserialize from Pickle"""
+    import pickle
+    return pickle.loads(data)
+
+
+def to_msgpack(obj: Any) -> bytes:
+    """Serialize to MessagePack"""
+    try:
+        import msgpack
+        return msgpack.packb(obj, use_bin_type=True)
+    except ImportError:
+        raise ConversionError("msgpack not installed: pip install msgpack")
+
+
+def from_msgpack(data: bytes) -> Any:
+    """Deserialize from MessagePack"""
+    try:
+        import msgpack
+        return msgpack.unpackb(data, raw=False)
+    except ImportError:
+        raise ConversionError("msgpack not installed: pip install msgpack")
+
+
+def to_toml(obj: Dict) -> str:
+    """Serialize to TOML"""
+    try:
+        import tomli
+        return tomli.dumps(obj)
+    except ImportError:
+        return json.dumps(obj, indent=2)
+
+
+def from_toml(data: str) -> Dict:
+    """Deserialize from TOML"""
+    try:
+        import tomli
+        return tomli.loads(data)
+    except ImportError:
+        return json.loads(data)
+
+
+# ============ MIME TYPES ============
+
+def get_mime_type(file_path: str) -> Optional[str]:
+    """Get MIME type from file extension"""
+    mime, _ = mimetypes.guess_type(file_path)
+    return mime
+
+
+def get_extension(mime_type: str) -> Optional[str]:
+    """Get file extension from MIME type"""
+    ext = mimetypes.guess_extension(mime_type)
+    return ext
+
+
+def is_text_mime(mime_type: str) -> bool:
+    """Check if MIME type is text"""
+    return mime_type and mime_type.startswith('text/')
+
+
+def is_image_mime(mime_type: str) -> bool:
+    """Check if MIME type is image"""
+    return mime_type and mime_type.startswith('image/')
+
+
+# ============ FILETYPE DETECTION ============
+
+def detect_file_type(file_path: str) -> Dict:
+    """Detect file type using magic bytes"""
+    p = Path(file_path)
+    if not p.exists():
+        return {'error': 'File not found'}
+    
+    signatures = {
+        b'\x89PNG': ('png', 'image/png'),
+        b'\xff\xd8\xff': ('jpg', 'image/jpeg'),
+        b'GIF87a': ('gif', 'image/gif'),
+        b'GIF89a': ('gif', 'image/gif'),
+        b'BM': ('bmp', 'image/bmp'),
+        b'PK\x03\x04': ('zip', 'application/zip'),
+        b'\x1f\x8b': ('gz', 'application/gzip'),
+        b'SQLite format 3': ('sqlite', 'application/x-sqlite3'),
+        b'%PDF': ('pdf', 'application/pdf'),
+        b'\xca\xfe\xba\xbe': ('class', 'application/java'),
+        b'\x50\x4b': ('docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    }
+    
+    with open(file_path, 'rb') as f:
+        header = f.read(16)
+    
+    for sig, (ext, mime) in signatures.items():
+        if header.startswith(sig):
+            return {'extension': ext, 'mime': mime, 'format': 'binary'}
+    
+    return {'extension': p.suffix[1:] or None, 'mime': get_mime_type(file_path), 'format': 'text' if is_text_mime(get_mime_type(file_path)) else 'unknown'}
+
+
+# ============ MARKDOWN/HTML/AAGENT/CLAUDE ============
+
+def markdown_to_html(md: str) -> str:
+    """Convert Markdown to HTML"""
+    import re
+    
+    html = md
+    
+    headers = re.findall(r'^(#{1,6})\s+(.+)$', md, re.MULTILINE)
+    for hashes, text in headers:
+        level = len(hashes)
+        html = html.replace(f"{hashes} {text}", f"<h{level}>{text}</h{level}>")
+    
+    bold = re.findall(r'\*\*(.+?)\*\*', html)
+    for text in bold:
+        html = html.replace(f"**{text}**", f"<strong>{text}</strong>")
+    
+    italic = re.findall(r'\*(.+?)\*', html)
+    for text in italic:
+        html = html.replace(f"*{text}*", f"<em>{text}</em>")
+    
+    code_blocks = re.findall(r'```(\w*)\n([\s\S]*?)```', html)
+    for lang, code in code_blocks:
+        html = html.replace(f"```{lang}\n{code}```", f'<pre><code class="language-{lang}">{code}</code></pre>')
+    
+    inline_code = re.findall(r'`(.+?)`', html)
+    for code in inline_code:
+        html = html.replace(f"`{code}`", f"<code>{code}</code>")
+    
+    links = re.findall(r'\[(.+?)\]\((.+?)\)', html)
+    for text, url in links:
+        html = html.replace(f"[{text}]({url})", f'<a href="{url}">{text}</a>')
+    
+    lines = html.split('\n')
+    result = ['<html><head><meta charset="UTF-8"></head><body>']
+    in_list = False
+    
+    for line in lines:
+        line = line.strip()
+        if line.startswith('<h') or line.startswith('<pre'):
+            result.append(line)
+            in_list = False
+        elif line.startswith('- ') or line.startswith('* '):
+            if not in_list:
+                result.append('<ul>')
+                in_list = True
+            result.append(f"<li>{line[2:]}</li>")
+        elif line:
+            if in_list:
+                result.append('</ul>')
+                in_list = False
+            result.append(f"<p>{line}</p>")
+    
+    if in_list:
+        result.append('</ul>')
+    result.append('</body></html>')
+    
+    return '\n'.join(result)
+
+
+def html_to_markdown(html: str) -> str:
+    """Convert HTML to Markdown"""
+    import re
+    
+    md = html
+    
+    h_tags = re.findall(r'<h(\d)>(.+?)</h\d>', html)
+    for level, text in h_tags:
+        md = md.replace(f"<h{level}>{text}</h{level}>", f"{'#' * int(level)} {text}")
+    
+    md = re.sub(r'<strong>(.+?)</strong>', r'**\1**', md)
+    md = re.sub(r'<b>(.+?)</b>', r'**\1**', md)
+    md = re.sub(r'<em>(.+?)</em>', r'*\1*', md)
+    md = re.sub(r'<i>(.+?)</i>', r'*\1*', md)
+    md = re.sub(r'<code>(.+?)</code>', r'`\1`', md)
+    md = re.sub(r'<a href="(.+?)">(.+?)</a>', r'[\2](\1)', md)
+    md = re.sub(r'<li>(.+?)</li>', r'- \1', md)
+    md = re.sub(r'<p>(.+?)</p>', r'\1\n', md)
+    md = re.sub(r'<br\s*/?>', r'\n', md)
+    md = re.sub(r'<[^>]+>', '', md)
+    md = re.sub(r'\n{3,}', '\n\n', md)
+    
+    return md.strip()
+
+
+def to_agent_format(text: str) -> str:
+    """Convert to agent/Claude format context"""
+    return f"""# Context
+
+{text}
+
+---
+
+## Guidelines
+- Think silently when needed
+- Use tools for file operations
+- Ask for clarification when needed
+- Provide concise responses
+"""
+
+
+def to_claude_format(text: str) -> str:
+    """Convert to Claude Code context format"""
+    return f"""# Claude Code Context
+
+## Project Overview
+This document contains context for Claude Code AI assistant.
+
+## Guidelines
+- Think silently when needed
+- Use tools for file operations
+- Ask for clarification when needed
+- Provide concise responses
+
+---
+
+{text}
+"""
+
+
+# ============ MAIN CLI ============
 
 def main():
     import argparse
