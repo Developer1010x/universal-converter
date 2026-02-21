@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "universal-converter"
 version = "1.0.0"
-description = "Convert anything to anything - data, documents, images, archives"
+description = "Convert anything to anything - comprehensive file format conversion library"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "Prajwall Narayana", email = "sprajwalln.cs21@rvce.edu.in"}
 ]
-keywords = ["converter", "convert", "format", "transform", "utility"]
+keywords = ["converter", "convert", "format", "transform", "utility", "file-conversion"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -24,32 +24,198 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = [
+dependencies = []
+
+[project.optional-dependencies]
+# Core conversions (no heavy dependencies)
+core = []
+
+# Image processing
+images = [
     "pillow",
+    "cairosvg",
+    "pytesseract",
+]
+
+# PDF documents
+pdf = [
     "PyPDF2",
     "reportlab",
+    "pdf2image",
+]
+
+# Word documents
+word = [
+    "python-docx",
+]
+
+# Spreadsheets
+spreadsheets = [
+    "pandas",
+    "openpyxl",
+    "xlrd",
+    "pyarrow",
+]
+
+# Presentations
+presentations = [
+    "python-pptx",
+]
+
+# Markdown/HTML
+markup = [
+    "markdown",
+    "weasyprint",
+    "beautifulsoup4",
+    "html2text",
+]
+
+# ODT
+odt = [
+    "odfpy",
+]
+
+# Audio processing
+audio = [
+    "pydub",
+    "SpeechRecognition",
+    "gtts",
+    "pyttsx3",
+]
+
+# Video processing
+video = [
+    "moviepy",
+]
+
+# Archives
+archives = [
+    "rarfile",
+    "pyzipper",
+]
+
+# Web/API
+web = [
+    "requests",
+    "xmltodict",
+]
+
+# Scientific data
+scientific = [
+    "numpy",
+    "scipy",
+    "h5py",
+]
+
+# Encryption/Security
+security = [
+    "qrcode",
+    "pyzbar",
+    "bcrypt",
+    "argon2",
+    "PyJWT",
+]
+
+# eBooks
+ebooks = [
+    "ebooklib",
+]
+
+# Units/Currency
+units = [
+    "pint",
+    "forex-python",
+]
+
+# AI/NLP
+ai = [
+    "sentence-transformers",
+    "tiktoken",
+    "openai-whisper",
+]
+
+# Cloud storage
+cloud = [
+    "boto3",
+    "google-cloud-storage",
+    "azure-storage-blob",
+]
+
+# Blockchain
+blockchain = [
+    "eth-account",
+    "web3",
+]
+
+# Bioinformatics
+bioinformatics = [
+    "biopython",
+]
+
+# CAD/Graphics
+cad = [
+    "ezdxf",
+    "trimesh",
+]
+
+# GIS/Geospatial
+gis = [
+    "geopandas",
+    "shapely",
+]
+
+# Fonts
+fonts = [
+    "fonttools",
+]
+
+# Networking
+networking = [
+    "scapy",
+]
+
+# Serialization
+serialization = [
+    "msgpack",
+    "protobuf",
+]
+
+# Email
+email = [
+    "extract-msg",
+]
+
+# All features
+all = [
+    "pillow",
+    "cairosvg",
+    "pytesseract",
+    "PyPDF2",
+    "reportlab",
+    "pdf2image",
     "python-docx",
     "pandas",
     "openpyxl",
     "xlrd",
+    "pyarrow",
     "python-pptx",
     "markdown",
     "weasyprint",
+    "beautifulsoup4",
+    "html2text",
     "odfpy",
-    "cairosvg",
     "pydub",
     "SpeechRecognition",
+    "gtts",
+    "pyttsx3",
     "moviepy",
     "rarfile",
     "pyzipper",
-    "beautifulsoup4",
-    "html2text",
     "requests",
     "xmltodict",
     "numpy",
     "scipy",
     "h5py",
-    "pyarrow",
     "qrcode",
     "pyzbar",
     "bcrypt",
@@ -58,14 +224,9 @@ dependencies = [
     "ebooklib",
     "pint",
     "forex-python",
-    "pytesseract",
-    "pdf2image",
-    "msgpack",
     "sentence-transformers",
     "tiktoken",
     "openai-whisper",
-    "gtts",
-    "pyttsx3",
     "boto3",
     "google-cloud-storage",
     "azure-storage-blob",
@@ -73,20 +234,16 @@ dependencies = [
     "web3",
     "biopython",
     "ezdxf",
-    "kafka-python",
-    "redis",
-    "paho-mqtt",
-    "pyx12",
+    "trimesh",
     "geopandas",
     "shapely",
-    "trimesh",
     "fonttools",
     "scapy",
+    "msgpack",
     "protobuf",
     "extract-msg",
 ]
 
-[project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "black", "flake8", "mypy"]
 
 [project.urls]
