@@ -27,7 +27,127 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-full = ["pillow", "PyPDF2", "reportlab", "python-docx"]
+# Core
+full = [
+    "pillow",
+    "PyPDF2",
+    "reportlab",
+    "python-docx",
+]
+# Spreadsheet
+spreadsheet = [
+    "pandas",
+    "openpyxl",
+    "xlrd",
+]
+# Presentation
+presentation = [
+    "python-pptx",
+]
+# Markdown/HTML
+markdown = [
+    "markdown",
+    "weasyprint",
+]
+# ODT
+odt = [
+    "odfpy",
+]
+# SVG
+svg = [
+    "cairosvg",
+]
+# Audio
+audio = [
+    "pydub",
+    "SpeechRecognition",
+]
+# Video
+video = [
+    "moviepy",
+]
+# Archive
+archive = [
+    "rarfile",
+    "pyzipper",
+]
+# Web
+web = [
+    "beautifulsoup4",
+    "html2text",
+    "requests",
+    "xmltodict",
+]
+# Scientific
+scientific = [
+    "numpy",
+    "scipy",
+    "h5py",
+    "pyarrow",
+]
+# Encryption
+encryption = [
+    "qrcode",
+    "pyzbar",
+    "bcrypt",
+    "argon2",
+    "PyJWT",
+]
+# Ebook
+ebook = [
+    "ebooklib",
+]
+# Advanced units
+units = [
+    "pint",
+    "forex-python",
+]
+# OCR
+ocr = [
+    "pytesseract",
+]
+# PDF images
+pdf-images = [
+    "pdf2image",
+]
+# All features
+all = [
+    "pillow",
+    "PyPDF2",
+    "reportlab",
+    "python-docx",
+    "pandas",
+    "openpyxl",
+    "xlrd",
+    "python-pptx",
+    "markdown",
+    "weasyprint",
+    "odfpy",
+    "cairosvg",
+    "pydub",
+    "SpeechRecognition",
+    "moviepy",
+    "rarfile",
+    "pyzipper",
+    "beautifulsoup4",
+    "html2text",
+    "requests",
+    "xmltodict",
+    "numpy",
+    "scipy",
+    "h5py",
+    "pyarrow",
+    "qrcode",
+    "pyzbar",
+    "bcrypt",
+    "argon2",
+    "PyJWT",
+    "ebooklib",
+    "pint",
+    "forex-python",
+    "pytesseract",
+    "pdf2image",
+]
 dev = ["pytest", "pytest-cov", "black", "flake8", "mypy"]
 
 [project.urls]

@@ -12,50 +12,61 @@ Convert anything to anything - a comprehensive, OS-neutral Python conversion lib
 - JSON, CSV, TSV, XML, YAML, INI, TOML
 
 ### Documents
-- PDF, DOCX, TXT, HTML, Markdown
+- PDF, DOCX, TXT, HTML, Markdown, RTF, ODT
+
+### Spreadsheets
+- CSV ↔ Excel (XLSX, XLS)
+- Excel ↔ JSON
+- CSV ↔ Parquet
 
 ### Databases
 - SQLite → JSON, CSV, MySQL, PostgreSQL
+- MySQL/PostgreSQL dump parsing
 
 ### Images
-- PNG, JPG, JPEG, GIF, BMP, TIFF, WebP, ICO
+- PNG, JPG, JPEG, GIF, BMP, TIFF, WebP, ICO, SVG
 - Resize, convert between formats
+- OCR (Image to Text)
 
 ### Archives
-- ZIP, TAR, GZ, BZ2
+- ZIP, TAR, GZ, BZ2, RAR
+- Encrypted ZIP
 
-### Encoding
-- Base64 encode/decode
-- Hex encode/decode
-- URL encode/decode
-- HTML encode/decode
+### Presentations
+- Text → PPTX
+- PPTX → PDF, TXT
 
-### Color Formats
-- HEX ↔ RGB ↔ HSL
+### Audio
+- MP3 ↔ WAV
+- Audio → Text (Speech-to-Text)
 
-### Date/Time
-- Unix timestamp ↔ ISO 8601 ↔ Human readable
+### Video
+- MP4 ↔ AVI
+- Video → GIF
+- Video → Audio
 
-### Case Conversions
-- camelCase, snake_case, kebab-case, PascalCase, SCREAMING_SNAKE_CASE
+### Web & API
+- HTML → Text, Markdown
+- XML ↔ Dict
+- URL → File Download
 
-### Units
-- Length: m, km, cm, mm, mi, ft, in
-- Weight: kg, g, mg, lb, oz
-- Temperature: °C, °F, K
-- Volume: L, mL, gal, qt, pt
-- Data: B, KB, MB, GB, TB
+### Scientific Data
+- NumPy arrays
+- HDF5 files
+- MATLAB (.mat) files
+- Parquet files
 
-### Hash Functions
-- MD5, SHA1, SHA256, SHA512
+### Encryption & Encoding
+- QR Code generation & reading
+- Password hashing (bcrypt, argon2)
+- JWT encode/decode
 
-### Serialization
-- JSON, Pickle, MessagePack, TOML
+### eBooks
+- EPUB ↔ Text
 
-### Utilities
-- File info & type detection
-- Magic byte detection
-- MIME type detection
+### Advanced Units
+- Unit conversion (pint)
+- Currency conversion
 
 ## Installation
 
@@ -64,16 +75,37 @@ Convert anything to anything - a comprehensive, OS-neutral Python conversion lib
 pip install universal-converter
 
 # Full features
-pip install universal-converter[full]
+pip install universal-converter[all]
+
+# Specific features
+pip install universal-converter[spreadsheet]  # Excel/CSV
+pip install universal-converter[video]       # Video conversions
+pip install universal-converter[audio]       # Audio conversions
+pip install universal-converter[web]          # HTML/XML conversions
+pip install universal-converter[encryption]   # QR/JWT/hashing
+pip install universal-converter[ocr]          # Image to text
 ```
 
-### Optional Dependencies
-- `pillow` - Image conversion & resizing
-- `PyPDF2` - PDF to text
-- `reportlab` - Text to PDF
-- `python-docx` - Word documents
-- `pandas` - CSV/database enhancements
-- `msgpack` - MessagePack serialization
+### Optional Dependencies by Feature
+
+| Feature | Packages |
+|---------|----------|
+| Images | pillow, cairosvg |
+| PDF | PyPDF2, reportlab, pdf2image |
+| Word | python-docx |
+| Excel | pandas, openpyxl, xlrd |
+| Presentations | python-pptx |
+| Markdown/HTML | markdown, weasyprint |
+| ODT | odfpy |
+| Audio | pydub, SpeechRecognition |
+| Video | moviepy |
+| Archives | rarfile, pyzipper |
+| Web | beautifulsoup4, html2text, requests, xmltodict |
+| Scientific | numpy, scipy, h5py, pyarrow |
+| Encryption | qrcode, pyzbar, bcrypt, argon2, PyJWT |
+| eBooks | ebooklib |
+| Units | pint, forex-python |
+| OCR | pytesseract |
 
 ## Usage
 
@@ -84,7 +116,12 @@ from universal_converter import (
     convert, convert_file, resize_image,
     encode_base64, decode_hex, convert_color,
     convert_case, convert_unit, timestamp_to_iso,
-    hash_string, detect_file_type, file_info
+    hash_string, detect_file_type, file_info,
+    csv_to_excel, excel_to_csv,
+    text_to_qr, qr_to_text,
+    image_to_text, html_to_text,
+    epub_to_text, text_to_epub,
+    mp3_to_wav, video_to_gif
 )
 
 # File conversion
@@ -93,34 +130,37 @@ convert_file('input.json', 'output.xml')
 # Image resize
 resize_image('photo.png', 'small.png', width=800)
 
-# Encoding
-encode_base64("Hello World")  # SGVsbG8gV29ybGQ=
-decode_hex("48656c6c6f")  # Hello
+# Spreadsheet
+csv_to_excel('data.csv', 'data.xlsx')
+excel_to_csv('data.xlsx', 'data.csv')
 
 # Color conversion
 convert_color("#FF5733", "rgb")  # rgb(255, 87, 51)
-convert_color("rgb(255, 87, 51)", "hsl")  # hsl(11, 100%, 60%)
 
 # Case conversion
 convert_case("hello_world", "camel")  # helloWorld
-convert_case("HelloWorld", "snake")  # hello_world
-convert_case("hello_world", "kebab")  # hello-world
 
 # Unit conversion
 convert_unit(100, "km", "mi")  # 62.137
-convert_unit(32, "celsius", "fahrenheit")  # 89.6
 
-# Date conversion
-timestamp_to_iso(1700000000)  # 2023-11-14T21:33:20
-human_to_timestamp("2024-01-01", "%Y-%m-%d")
+# QR Code
+text_to_qr("Hello World", "qr.png")
+qr_to_text("qr.png")  # "Hello World"
 
-# Hash
-hash_string("password", "sha256")
-hash_file("file.txt", "md5")
+# OCR
+image_to_text("screenshot.png")  # Extract text from image
 
-# File info
-file_info("document.pdf")
-detect_file_type("image.jpg")
+# Audio
+mp3_to_wav("audio.mp3", "audio.wav")
+
+# Video
+video_to_gif("video.mp4", "animation.gif")
+
+# eBook
+epub_to_text("book.epub", "book.txt")
+
+# Web
+html_to_text("page.html", "page.txt")
 ```
 
 ### Command Line
@@ -152,13 +192,16 @@ universal-convert -l
 
 | Category | Formats |
 |----------|---------|
-| Text | txt, md, html, rst |
-| Data | json, csv, tsv, xml, yaml, ini, toml |
-| Document | pdf, docx, doc, odt, rtf |
+| Text | txt, md, html, rst, rtf |
+| Data | json, csv, tsv, xml, yaml, ini, toml, parquet |
+| Document | pdf, docx, doc, odt |
 | Database | sqlite, db, mysql, postgresql |
-| Image | png, jpg, jpeg, gif, bmp, tiff, webp, ico |
-| Archive | zip, tar, gz, bz2 |
+| Image | png, jpg, jpeg, gif, bmp, tiff, webp, ico, svg |
+| Archive | zip, tar, gz, bz2, rar |
 | Code | py, js, java, c, cpp, go, rs, rb, etc. |
+| Audio | mp3, wav, ogg, flac |
+| Video | mp4, avi, mov, gif |
+| eBook | epub, mobi, azw |
 
 ## Requirements
 

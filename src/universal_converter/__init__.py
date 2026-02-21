@@ -1903,6 +1903,634 @@ def create_rar(files: List[str], rar_path: str) -> str:
     return rar_path
 
 
+# ============ DATABASE CONVERSIONS ============
+
+def mysql_to_dict(mysql_dump_path: str) -> Dict:
+    """Parse MySQL dump file to dictionary"""
+    with open(mysql_dump_path, 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read()
+    
+    tables = {}
+    current_table = None
+    current_data = []
+    columns = []
+    
+    for line in content.split('\n'):
+        line = line.strip()
+        
+        if line.upper().startswith('CREATE TABLE'):
+            if current_table and current_data:
+                tables[current_table] = {'columns': columns, 'data': current_data}
+            match = re.search(r'CREATE TABLE `?(\w+)`?', line, re.IGNORECASE)
+            if match:
+                current_table = match.group(1)
+                current_data = []
+                columns = []
+        
+        elif line.upper().startswith('INSERT INTO'):
+            parts = line.split('VALUES')
+            if len(parts) > 1:
+                values_str = parts[1].rstrip(';')
+                if values_str.startswith('(') and values_str.endswith(')'):
+                    values_str = values_str[1:-1]
+                    values = []
+                    in_quote = False
+                    current_val = ""
+                    for char in values_str:
+                        if char == "'" and not in_quote:
+                            in_quote = True
+                        elif char == "'" and in_quote:
+                            in_quote = False
+                        elif char == ',' and not in_quote:
+                            values.append(current_val.strip().strip("'\""))
+                            current_val = ""
+                        else:
+                            current_val += char
+                    values.append(current_val.strip().strip("'\""))
+                    
+                    if not columns:
+                        columns = [f"col_{i}" for i in range(len(values))]
+                    current_data.append(dict(zip(columns, values)))
+    
+    if current_table and current_data:
+        tables[current_table] = {'columns': columns, 'data': current_data}
+    
+    return {'tables': tables}
+
+
+def postgresql_to_dict(pg_dump_path: str) -> Dict:
+    """Parse PostgreSQL dump file to dictionary"""
+    with open(pg_dump_path, 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read()
+    
+    tables = {}
+    current_table = None
+    current_data = []
+    columns = []
+    
+    for line in content.split('\n'):
+        line = line.strip()
+        
+        if line.upper().startswith('CREATE TABLE'):
+            if current_table and current_data:
+                tables[current_table] = {'columns': columns, 'data': current_data}
+            match = re.search(r'CREATE TABLE (\w+)', line, re.IGNORECASE)
+            if match:
+                current_table = match.group(1)
+                current_data = []
+                columns = []
+        
+        elif line.upper().startswith('INSERT INTO'):
+            parts = line.split('VALUES')
+            if len(parts) > 1:
+                values_str = parts[1].rstrip(';')
+                if values_str.startswith('(') and values_str.endswith(')'):
+                    values_str = values_str[1:-1]
+                    values = [v.strip().strip("'\"") for v in values_str.split(',')]
+                    if not columns:
+                        columns = [f"col_{i}" for i in range(len(values))]
+                    current_data.append(dict(zip(columns, values)))
+    
+    if current_table and current_data:
+        tables[current_table] = {'columns': columns, 'data': current_data}
+    
+    return {'tables': tables}
+
+
+def dict_to_mysql(data: Dict, table_name: str = "table") -> str:
+    """Convert dictionary to MySQL INSERT statements"""
+    lines = []
+    
+    tables = data.get('tables', {table_name: {'columns': list(data.keys()) if not isinstance(data.get('tables'), dict) else [], 'data': [data]}})
+    
+    for tbl, tbl_data in tables.items():
+        cols = tbl_data.get('columns', [])
+        rows = tbl_data.get('data', [])
+        
+        if cols:
+            col_defs = ', '.join([f"`{c}` TEXT" for c in cols])
+            lines.append(f"CREATE TABLE {tbl} ({col_defs});")
+        
+        for row in rows:
+            if isinstance(row, dict):
+                vals = "', '".join(str(v) for v in row.values())
+                lines.append(f"INSERT INTO {tbl} VALUES ('{vals}');")
+    
+    return '\n'.join(lines)
+
+
+def dict_to_postgresql(data: Dict, table_name: str = "table") -> str:
+    """Convert dictionary to PostgreSQL INSERT statements"""
+    lines = []
+    
+    tables = data.get('tables', {table_name: {'columns': list(data.keys()) if not isinstance(data.get('tables'), dict) else [], 'data': [data]}})
+    
+    for tbl, tbl_data in tables.items():
+        cols = tbl_data.get('columns', [])
+        rows = tbl_data.get('data', [])
+        
+        if cols:
+            col_defs = ', '.join([f"{c} TEXT" for c in cols])
+            lines.append(f"CREATE TABLE {tbl} ({col_defs});")
+        
+        for row in rows:
+            if isinstance(row, dict):
+                vals = "', '".join(str(v) for v in row.values())
+                lines.append(f"INSERT INTO {tbl} VALUES ('{vals}');")
+    
+    return '\n'.join(lines)
+
+
+# ============ WEB/API CONVERSIONS ============
+
+def html_to_text(html_path: str, text_path: str = None) -> str:
+    """Convert HTML to plain text"""
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        raise ConversionError("beautifulsoup4 required: pip install beautifulsoup4")
+    
+    with open(html_path, 'r', encoding='utf-8', errors='ignore') as f:
+        soup = BeautifulSoup(f.read(), 'html.parser')
+    
+    text = soup.get_text(separator='\n', strip=True)
+    
+    if text_path is None:
+        text_path = html_path.rsplit('.', 1)[0] + '.txt'
+    
+    with open(text_path, 'w', encoding='utf-8') as f:
+        f.write(text)
+    
+    return text_path
+
+
+def html_to_markdown(html_path: str, md_path: str = None) -> str:
+    """Convert HTML to Markdown"""
+    try:
+        import html2text
+    except ImportError:
+        raise ConversionError("html2text required: pip install html2text")
+    
+    with open(html_path, 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read()
+    
+    h = html2text.HTML2Text()
+    h.ignore_links = False
+    md = h.handle(content)
+    
+    if md_path is None:
+        md_path = html_path.rsplit('.', 1)[0] + '.md'
+    
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write(md)
+    
+    return md_path
+
+
+def xml_to_dict(xml_path: str) -> Dict:
+    """Convert XML to dictionary"""
+    try:
+        import xmltodict
+    except ImportError:
+        raise ConversionError("xmltodict required: pip install xmltodict")
+    
+    with open(xml_path, 'r', encoding='utf-8') as f:
+        return xmltodict.parse(f.read())
+
+
+def dict_to_xml(data: Dict, xml_path: str = None, root: str = "root") -> str:
+    """Convert dictionary to XML"""
+    try:
+        import xmltodict
+    except ImportError:
+        raise ConversionError("xmltodict required: pip install xmltodict")
+    
+    xml_str = xmltodict.unparse({root: data}, pretty=True)
+    
+    if xml_path:
+        with open(xml_path, 'w', encoding='utf-8') as f:
+            f.write(xml_str)
+    
+    return xml_str
+
+
+def url_to_json(url: str) -> Dict:
+    """Fetch JSON from URL"""
+    try:
+        import requests
+    except ImportError:
+        raise ConversionError("requests required: pip install requests")
+    
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()
+
+
+def download_file(url: str, output_path: str = None) -> str:
+    """Download file from URL"""
+    try:
+        import requests
+    except ImportError:
+        raise ConversionError("requests required: pip install requests")
+    
+    response = requests.get(url)
+    response.raise_for_status()
+    
+    if output_path is None:
+        output_path = url.split('/')[-1]
+    
+    with open(output_path, 'wb') as f:
+        f.write(response.content)
+    
+    return output_path
+
+
+# ============ SCIENTIFIC DATA FORMATS ============
+
+def numpy_to_list(array_path: str) -> List:
+    """Convert NumPy array file to Python list"""
+    try:
+        import numpy as np
+    except ImportError:
+        raise ConversionError("numpy required: pip install numpy")
+    
+    arr = np.load(array_path)
+    return arr.tolist()
+
+
+def list_to_numpy(data: List, output_path: str = None) -> str:
+    """Convert Python list to NumPy array file"""
+    try:
+        import numpy as np
+    except ImportError:
+        raise ConversionError("numpy required: pip install numpy")
+    
+    arr = np.array(data)
+    
+    if output_path is None:
+        output_path = "array.npy"
+    
+    np.save(output_path, arr)
+    return output_path
+
+
+def hdf5_to_dict(h5_path: str) -> Dict:
+    """Read HDF5 file to dictionary"""
+    try:
+        import h5py
+    except ImportError:
+        raise ConversionError("h5py required: pip install h5py")
+    
+    result = {}
+    
+    def visit_items(name, obj):
+        if isinstance(obj, h5py.Dataset):
+            result[name] = obj[()]
+        elif isinstance(obj, h5py.Group):
+            result[name] = dict(obj.attrs)
+    
+    with h5py.File(h5_path, 'r') as f:
+        f.visititems(visit_items)
+    
+    return result
+
+
+def matlab_to_dict(mat_path: str) -> Dict:
+    """Read MATLAB .mat file to dictionary"""
+    try:
+        from scipy.io import loadmat
+    except ImportError:
+        raise ConversionError("scipy required: pip install scipy")
+    
+    return loadmat(mat_path)
+
+
+def csv_to_parquet(csv_path: str, parquet_path: str = None) -> str:
+    """Convert CSV to Parquet"""
+    try:
+        import pandas as pd
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError:
+        raise ConversionError("pandas and pyarrow required: pip install pandas pyarrow")
+    
+    df = pd.read_csv(csv_path)
+    
+    if parquet_path is None:
+        parquet_path = csv_path.rsplit('.', 1)[0] + '.parquet'
+    
+    table = pa.Table.from_pandas(df)
+    pq.write_table(table, parquet_path)
+    
+    return parquet_path
+
+
+def parquet_to_csv(parquet_path: str, csv_path: str = None) -> str:
+    """Convert Parquet to CSV"""
+    try:
+        import pandas as pd
+    except ImportError:
+        raise ConversionError("pandas required: pip install pandas")
+    
+    df = pd.read_parquet(parquet_path)
+    
+    if csv_path is None:
+        csv_path = parquet_path.rsplit('.', 1)[0] + '.csv'
+    
+    df.to_csv(csv_path, index=False)
+    return csv_path
+
+
+# ============ SERIALIZATION ============
+
+def to_json_bytes(data: Any) -> bytes:
+    """Serialize to JSON bytes"""
+    return json.dumps(data, default=str).encode('utf-8')
+
+
+def from_json_bytes(data: bytes) -> Any:
+    """Deserialize from JSON bytes"""
+    return json.loads(data.decode('utf-8'))
+
+
+# ============ ENCRYPTION/ENCODING ============
+
+def text_to_qr(text: str, qr_path: str = None) -> str:
+    """Generate QR code from text"""
+    try:
+        import qrcode
+    except ImportError:
+        raise ConversionError("qrcode required: pip install qrcode")
+    
+    if qr_path is None:
+        qr_path = "qrcode.png"
+    
+    img = qrcode.make(text)
+    img.save(qr_path)
+    
+    return qr_path
+
+
+def qr_to_text(qr_path: str) -> str:
+    """Read QR code to text"""
+    try:
+        from PIL import Image
+        from pyzbar.pyzbar import decode
+    except ImportError:
+        raise ConversionError("Pillow and pyzbar required: pip install pillow pyzbar")
+    
+    img = Image.open(qr_path)
+    decoded = decode(img)
+    
+    if decoded:
+        return decoded[0].data.decode('utf-8')
+    return ""
+
+
+def password_to_hash(password: str, algorithm: str = 'bcrypt') -> str:
+    """Convert password to hash"""
+    if algorithm == 'bcrypt':
+        try:
+            import bcrypt
+            return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        except ImportError:
+            raise ConversionError("bcrypt required: pip install bcrypt")
+    elif algorithm == 'argon2':
+        try:
+            import argon2
+            return argon2.PasswordHasher().hash(password)
+        except ImportError:
+            raise ConversionError("argon2 required: pip install argon2")
+    else:
+        return hash_string(password, algorithm)
+
+
+def verify_password(password: str, hashed: str, algorithm: str = 'bcrypt') -> bool:
+    """Verify password against hash"""
+    if algorithm == 'bcrypt':
+        try:
+            import bcrypt
+            return bcrypt.checkpw(password.encode(), hashed.encode())
+        except ImportError:
+            raise ConversionError("bcrypt required: pip install bcrypt")
+    else:
+        return hash_string(password, algorithm) == hashed
+
+
+def encode_jwt(payload: Dict, secret: str, algorithm: str = 'HS256') -> str:
+    """Encode JWT token"""
+    try:
+        import jwt
+    except ImportError:
+        raise ConversionError("PyJWT required: pip install PyJWT")
+    
+    return jwt.encode(payload, secret, algorithm=algorithm)
+
+
+def decode_jwt(token: str, secret: str, algorithm: str = 'HS256') -> Dict:
+    """Decode JWT token"""
+    try:
+        import jwt
+    except ImportError:
+        raise ConversionError("PyJWT required: pip install PyJWT")
+    
+    return jwt.decode(token, secret, algorithms=[algorithm])
+
+
+# ============ EBOOK CONVERSIONS ============
+
+def epub_to_text(epub_path: str, txt_path: str = None) -> str:
+    """Convert EPUB to plain text"""
+    try:
+        import ebooklib
+        from bs4 import BeautifulSoup
+    except ImportError:
+        raise ConversionError("ebooklib and beautifulsoup4 required: pip install ebooklib beautifulsoup4")
+    
+    from ebooklib import epub
+    
+    book = epub.read_epub(epub_path)
+    text_content = []
+    
+    for item in book.get_items():
+        if item.get_type() == 9:
+            soup = BeautifulSoup(item.get_content(), 'html.parser')
+            text_content.append(soup.get_text(separator='\n', strip=True))
+    
+    text = '\n\n'.join(text_content)
+    
+    if txt_path is None:
+        txt_path = epub_path.rsplit('.', 1)[0] + '.txt'
+    
+    with open(txt_path, 'w', encoding='utf-8') as f:
+        f.write(text)
+    
+    return txt_path
+
+
+def text_to_epub(txt_path: str, epub_path: str = None, title: str = "Book", author: str = "Unknown") -> str:
+    """Convert plain text to EPUB"""
+    try:
+        import ebooklib.epub as epub
+    except ImportError:
+        raise ConversionError("ebooklib required: pip install ebooklib")
+    
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    book = epub.EpubBook()
+    book.set_identifier('id123456')
+    book.set_title(title)
+    book.set_language('en')
+    book.add_author(author)
+    
+    chapters = content.split('\n\n')
+    spine = ['nav']
+    
+    for i, chapter in enumerate(chapters[:20]):
+        if chapter.strip():
+            c = epub.EpubHtml(title=f'Chapter {i+1}', file_name=f'chapter_{i+1}.xhtml', lang='en')
+            c.content = f'<html><head></head><body><h1>Chapter {i+1}</h1><p>{chapter.replace(chr(10), "<br>")}</p></body></html>'
+            book.add_item(c)
+            spine.append(c)
+    
+    book.toc = tuple(book.items)
+    book.spine = spine
+    
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    
+    if epub_path is None:
+        epub_path = txt_path.rsplit('.', 1)[0] + '.epub'
+    
+    epub.write_epub(epub_path, book, {})
+    
+    return epub_path
+
+
+# ============ ADVANCED UNIT CONVERSIONS ============
+
+def convert_units_advanced(value: float, from_unit: str, to_unit: str) -> float:
+    """Advanced unit conversion using pint library"""
+    try:
+        from pint import UnitRegistry
+    except ImportError:
+        raise ConversionError("pint required: pip install pint")
+    
+    ureg = UnitRegistry()
+    quantity = ureg.Quantity(value, from_unit)
+    result = quantity.to(to_unit)
+    return result.magnitude
+
+
+def currency_convert(amount: float, from_currency: str, to_currency: str) -> float:
+    """Convert currency using forex-python"""
+    try:
+        from forex_python.converter import CurrencyRates
+    except ImportError:
+        raise ConversionError("forex-python required: pip install forex-python")
+    
+    c = CurrencyRates()
+    return c.convert(from_currency, to_currency, amount)
+
+
+def timestamp_to_date(timestamp: Union[int, float], timezone: str = None) -> str:
+    """Convert timestamp to date with timezone"""
+    from datetime import datetime, timezone as tz
+    
+    if timezone:
+        tz_obj = tz.timezone(timezone)
+        dt = datetime.fromtimestamp(timestamp, tz_obj)
+    else:
+        dt = datetime.fromtimestamp(timestamp)
+    
+    return dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+
+
+def date_to_timestamp(date_str: str, format_str: str = '%Y-%m-%d %H:%M:%S') -> float:
+    """Convert date string to timestamp"""
+    from datetime import datetime
+    
+    dt = datetime.strptime(date_str, format_str)
+    return dt.timestamp()
+
+
+# ============ IMAGE OCR ============
+
+def image_to_text(image_path: str, language: str = 'eng') -> str:
+    """Extract text from image using OCR"""
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        raise ConversionError("pytesseract and Pillow required: pip install pytesseract pillow")
+    
+    img = Image.open(image_path)
+    text = pytesseract.image_to_string(img, lang=language)
+    return text
+
+
+# ============ PDF TO IMAGE ============
+
+def pdf_to_images(pdf_path: str, output_dir: str = None, dpi: int = 150) -> List[str]:
+    """Convert PDF pages to images"""
+    try:
+        from pdf2image import convert_from_path
+    except ImportError:
+        raise ConversionError("pdf2image required: pip install pdf2image")
+    
+    images = convert_from_path(pdf_path, dpi=dpi)
+    
+    if output_dir is None:
+        output_dir = pdf_path.rsplit('.', 1)[0] + '_pages'
+    
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    
+    output_paths = []
+    for i, img in enumerate(images):
+        output_path = f"{output_dir}/page_{i+1}.png"
+        img.save(output_path)
+        output_paths.append(output_path)
+    
+    return output_paths
+
+
+# ============ ENCRYPTED ZIP ============
+
+def create_encrypted_zip(files: List[str], zip_path: str, password: str) -> str:
+    """Create encrypted ZIP archive"""
+    try:
+        import pyzipper
+    except ImportError:
+        raise ConversionError("pyzipper required: pip install pyzipper")
+    
+    with pyzipper.AESZipFile(zip_path, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as zf:
+        zf.setpassword(password.encode())
+        for f in files:
+            zf.write(f)
+    
+    return zip_path
+
+
+def extract_encrypted_zip(zip_path: str, password: str, extract_to: str = None) -> str:
+    """Extract encrypted ZIP archive"""
+    try:
+        import pyzipper
+    except ImportError:
+        raise ConversionError("pyzipper required: pip install pyzipper")
+    
+    if extract_to is None:
+        extract_to = zip_path.rsplit('.', 1)[0] + '_extracted'
+    
+    Path(extract_to).mkdir(parents=True, exist_ok=True)
+    
+    with pyzipper.AESZipFile(zip_path, 'r') as zf:
+        zf.setpassword(password.encode())
+        zf.extractall(extract_to)
+    
+    return extract_to
+
+
 # ============ MAIN CLI ============
 
 def main():
