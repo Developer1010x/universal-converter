@@ -1,111 +1,118 @@
 # Universal Converter
 
-Convert anything to anything - a comprehensive, OS-neutral Python conversion library.
+Convert anything to anything - the most comprehensive Python conversion library.
 
 [![PyPI](https://img.shields.io/pypi/v/universal-converter)](https://pypi.org/project/universal-converter/)
 [![Python](https://img.shields.io/pypi/pyversions/universal-converter)](https://pypi.org/project/universal-converter/)
 [![License](https://img.shields.io/pypi/l/universal-converter)](LICENSE)
 
-## Features
+## Features (100+ Conversions)
 
-### Data Formats
-- JSON, CSV, TSV, XML, YAML, INI, TOML
+### 📄 Data Formats
+- JSON, CSV, TSV, XML, YAML, INI, TOML, Parquet
 
-### Documents
+### 📝 Documents
 - PDF, DOCX, TXT, HTML, Markdown, RTF, ODT
 
-### Spreadsheets
+### 📊 Spreadsheets
 - CSV ↔ Excel (XLSX, XLS)
 - Excel ↔ JSON
 - CSV ↔ Parquet
 
-### Databases
+### 🗄️ Databases
 - SQLite → JSON, CSV, MySQL, PostgreSQL
 - MySQL/PostgreSQL dump parsing
 
-### Images
+### 🖼️ Images
 - PNG, JPG, JPEG, GIF, BMP, TIFF, WebP, ICO, SVG
 - Resize, convert between formats
 - OCR (Image to Text)
 
-### Archives
+### 📦 Archives
 - ZIP, TAR, GZ, BZ2, RAR
 - Encrypted ZIP
 
-### Presentations
+### 📽️ Presentations
 - Text → PPTX
 - PPTX → PDF, TXT
 
-### Audio
+### 🎵 Audio
 - MP3 ↔ WAV
 - Audio → Text (Speech-to-Text)
+- Text → Speech (TTS)
 
-### Video
+### 🎥 Video
 - MP4 ↔ AVI
 - Video → GIF
 - Video → Audio
 
-### Web & API
-- HTML → Text, Markdown
+### 🌐 Web & API
+- HTML ↔ Text, Markdown
 - XML ↔ Dict
 - URL → File Download
 
-### Scientific Data
+### 🔬 Scientific Data
 - NumPy arrays
 - HDF5 files
 - MATLAB (.mat) files
-- Parquet files
+- FASTA/GenBank (Bioinformatics)
 
-### Encryption & Encoding
+### 🔐 Encryption & Encoding
 - QR Code generation & reading
 - Password hashing (bcrypt, argon2)
 - JWT encode/decode
 
-### eBooks
+### 📚 eBooks
 - EPUB ↔ Text
 
-### Advanced Units
+### 💱 Advanced Units
 - Unit conversion (pint)
 - Currency conversion
+
+### 🤖 AI / NLP
+- Text → Embeddings
+- Text → Tokens
+- Audio → Transcription (Whisper)
+- Text → Speech (TTS)
+
+### ☁️ Cloud Storage
+- AWS S3 upload/download
+- Google Cloud Storage upload/download
+- Azure Blob upload/download
+
+### ⛓️ Blockchain
+- Ethereum key pair generation
+- Private key → Address
+- Keccak-256 hash
+
+### 🧬 Bioinformatics
+- FASTA ↔ Dict
+- GenBank → FASTA
+
+### 🐳 Containers
+- Dockerfile → Image
+- Image ↔ TAR
+
+### 📡 Streaming
+- Kafka produce/consume
+- Redis set/get
+- MQTT publish
+
+### 🎨 CAD/Graphics
+- DXF → SVG
+
+### 📜 Data Exchange
+- EDI → JSON
+- HL7 → Dict
 
 ## Installation
 
 ```bash
-# Core (no dependencies)
+# Install with all dependencies (recommended)
 pip install universal-converter
-
-# Full features
-pip install universal-converter[all]
-
-# Specific features
-pip install universal-converter[spreadsheet]  # Excel/CSV
-pip install universal-converter[video]       # Video conversions
-pip install universal-converter[audio]       # Audio conversions
-pip install universal-converter[web]          # HTML/XML conversions
-pip install universal-converter[encryption]   # QR/JWT/hashing
-pip install universal-converter[ocr]          # Image to text
 ```
 
-### Optional Dependencies by Feature
-
-| Feature | Packages |
-|---------|----------|
-| Images | pillow, cairosvg |
-| PDF | PyPDF2, reportlab, pdf2image |
-| Word | python-docx |
-| Excel | pandas, openpyxl, xlrd |
-| Presentations | python-pptx |
-| Markdown/HTML | markdown, weasyprint |
-| ODT | odfpy |
-| Audio | pydub, SpeechRecognition |
-| Video | moviepy |
-| Archives | rarfile, pyzipper |
-| Web | beautifulsoup4, html2text, requests, xmltodict |
-| Scientific | numpy, scipy, h5py, pyarrow |
-| Encryption | qrcode, pyzbar, bcrypt, argon2, PyJWT |
-| eBooks | ebooklib |
-| Units | pint, forex-python |
-| OCR | pytesseract |
+All 40+ dependencies are installed by default!
 
 ## Usage
 
@@ -113,15 +120,32 @@ pip install universal-converter[ocr]          # Image to text
 
 ```python
 from universal_converter import (
+    # Basic conversions
     convert, convert_file, resize_image,
     encode_base64, decode_hex, convert_color,
     convert_case, convert_unit, timestamp_to_iso,
-    hash_string, detect_file_type, file_info,
-    csv_to_excel, excel_to_csv,
+    
+    # Spreadsheet
+    csv_to_excel, excel_to_csv, csv_to_parquet,
+    
+    # Media
     text_to_qr, qr_to_text,
     image_to_text, html_to_text,
     epub_to_text, text_to_epub,
-    mp3_to_wav, video_to_gif
+    mp3_to_wav, video_to_gif,
+    
+    # AI/Cloud
+    text_to_embeddings, audio_to_transcription,
+    upload_to_s3, download_from_gcs,
+    
+    # Blockchain
+    generate_key_pair, private_key_to_address,
+    
+    # Bioinformatics
+    fasta_to_dict, genbank_to_fasta,
+    
+    # Streaming
+    send_to_kafka, set_redis, publish_mqtt,
 )
 
 # File conversion
@@ -130,37 +154,20 @@ convert_file('input.json', 'output.xml')
 # Image resize
 resize_image('photo.png', 'small.png', width=800)
 
-# Spreadsheet
-csv_to_excel('data.csv', 'data.xlsx')
-excel_to_csv('data.xlsx', 'data.csv')
-
-# Color conversion
-convert_color("#FF5733", "rgb")  # rgb(255, 87, 51)
-
-# Case conversion
-convert_case("hello_world", "camel")  # helloWorld
-
-# Unit conversion
-convert_unit(100, "km", "mi")  # 62.137
-
 # QR Code
 text_to_qr("Hello World", "qr.png")
-qr_to_text("qr.png")  # "Hello World"
 
-# OCR
-image_to_text("screenshot.png")  # Extract text from image
+# AI Embeddings
+embeddings = text_to_embeddings("Hello world")
 
-# Audio
-mp3_to_wav("audio.mp3", "audio.wav")
+# Cloud Storage
+upload_to_s3('file.txt', 'my-bucket')
 
-# Video
-video_to_gif("video.mp4", "animation.gif")
+# Blockchain
+keys = generate_key_pair()
 
-# eBook
-epub_to_text("book.epub", "book.txt")
-
-# Web
-html_to_text("page.html", "page.txt")
+# Bioinformatics
+sequences = fasta_to_dict('dna.fasta')
 ```
 
 ### Command Line
@@ -172,16 +179,7 @@ universal-convert input.json -t csv -o output.csv
 # Image resize
 universal-convert image.png --resize --width 800
 
-# SQLite to MySQL
-universal-convert database.sqlite -t mysql -o output.sql
-
-# Batch convert
-universal-convert --batch file1.json file2.xml --output-dir out/
-
-# File info
-universal-convert document.pdf -i
-
-# Hash
+# File hash
 universal-convert file.txt --hash sha256
 
 # List formats
@@ -198,15 +196,15 @@ universal-convert -l
 | Database | sqlite, db, mysql, postgresql |
 | Image | png, jpg, jpeg, gif, bmp, tiff, webp, ico, svg |
 | Archive | zip, tar, gz, bz2, rar |
-| Code | py, js, java, c, cpp, go, rs, rb, etc. |
 | Audio | mp3, wav, ogg, flac |
 | Video | mp4, avi, mov, gif |
 | eBook | epub, mobi, azw |
+| Scientific | fasta, genbank, hdf5, mat, npy |
 
 ## Requirements
 
 - Python 3.8+
-- Standard library (core features)
+- All dependencies auto-installed
 
 ## License
 
