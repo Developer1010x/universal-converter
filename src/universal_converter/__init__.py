@@ -68,7 +68,9 @@ class UniversalConverter:
     ARCHIVE_FORMATS = {'zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar'}
     CODE_FORMATS = {'py', 'js', 'ts', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt', 'scala', 'r', 'sql', 'sh', 'bash', 'ps1'}
     
-    ALL_FORMATS = TEXT_FORMATS | DATA_FORMATS | DOCUMENT_FORMATS | IMAGE_FORMATS | ARCHIVE_FORMATS | CODE_FORMATS
+    DATABASE_FORMATS = {'mysql', 'postgresql', 'postgres', 'sqlite', 'mongodb', 'mongo', 'redis', 'sql', 'json', 'csv', 'parquet', 'db'}
+    
+    ALL_FORMATS = TEXT_FORMATS | DATA_FORMATS | DOCUMENT_FORMATS | IMAGE_FORMATS | ARCHIVE_FORMATS | CODE_FORMATS | DATABASE_FORMATS
     
     def __init__(self):
         self.errors: List[str] = []
@@ -460,7 +462,67 @@ class UniversalConverter:
                     data = f.read()
                 return self.convert(data, from_fmt, to_fmt, output_path)
             
+            if from_fmt in self.DATABASE_FORMATS:
+                return self._convert_database(input_path, output_path, from_fmt, to_fmt)
+            
             return ConversionResult(success=False, error=f"Unsupported: {from_fmt} → {to_fmt}")
+    
+    def _convert_database(self, input_path: str, output_path: str, from_fmt: str, to_fmt: str) -> ConversionResult:
+        try:
+            import sqlite3
+            
+            conn = sqlite3.connect(input_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = cursor.fetchall()
+            
+            db_data = {'tables': {}}
+            
+            for (table_name,) in tables:
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = [row[1] for row in cursor.fetchall()]
+                
+                cursor.execute(f"SELECT * FROM {table_name}")
+                rows = cursor.fetchall()
+                
+                db_data['tables'][table_name] = {
+                    'columns': columns,
+                    'data': [dict(zip(columns, row)) for row in rows]
+                }
+            
+            conn.close()
+            
+            if to_fmt == 'json':
+                result = json.dumps(db_data, indent=2, default=str)
+            elif to_fmt == 'csv':
+                all_data = []
+                for tbl, data in db_data['tables'].items():
+                    for row in data['data']:
+                        row['_table'] = tbl
+                        all_data.append(row)
+                if all_data:
+                    df = pd.DataFrame(all_data) if pd else None
+                    if df is not None:
+                        result = df.to_csv(index=False)
+                    else:
+                        result = self._to_csv({'data': all_data}, {})
+                else:
+                    result = ""
+            elif to_fmt in ('mysql', 'postgresql', 'sqlite'):
+                result = self._to_sql(db_data, {})
+            else:
+                return ConversionResult(success=False, error=f"Unsupported database conversion: {from_fmt} → {to_fmt}")
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(result)
+            
+            return ConversionResult(success=True, output_path=output_path, metadata={'format': to_fmt})
+            
+        except ImportError:
+            return ConversionResult(success=False, error="sqlite3 (built-in) or pandas required for database conversion")
+        except Exception as e:
+            return ConversionResult(success=False, error=f"Database conversion failed: {e}")
             
         except Exception as e:
             return ConversionResult(success=False, error=str(e), details=traceback.format_exc())
