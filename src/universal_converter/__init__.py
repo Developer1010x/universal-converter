@@ -34,6 +34,92 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
+REQUIRED_PACKAGES = {
+    'pillow': 'Pillow',
+    'pypdf2': 'PyPDF2',
+    'reportlab': 'reportlab',
+    'python-docx': 'docx',
+    'pandas': 'pandas',
+    'openpyxl': 'openpyxl',
+    'xlrd': 'xlrd',
+    'python-pptx': 'pptx',
+    'markdown': 'markdown',
+    'weasyprint': 'weasyprint',
+    'odfpy': 'odf',
+    'cairosvg': 'cairosvg',
+    'pydub': 'pydub',
+    'speechrecognition': 'SpeechRecognition',
+    'moviepy': 'moviepy',
+    'rarfile': 'rarfile',
+    'pyzipper': 'pyzipper',
+    'beautifulsoup4': 'bs4',
+    'html2text': 'html2text',
+    'requests': 'requests',
+    'xmltodict': 'xmltodict',
+    'numpy': 'numpy',
+    'scipy': 'scipy',
+    'h5py': 'h5py',
+    'pyarrow': 'pyarrow',
+    'qrcode': 'qrcode',
+    'pyzbar': 'pyzbar',
+    'bcrypt': 'bcrypt',
+    'argon2': 'argon2',
+    'pyjwt': 'jwt',
+    'ebooklib': 'ebooklib',
+    'pint': 'pint',
+    'forex-python': 'forex_python',
+    'pytesseract': 'pytesseract',
+    'pdf2image': 'pdf2image',
+    'msgpack': 'msgpack',
+}
+
+
+def ensure_dependencies():
+    """Check and install missing dependencies"""
+    import importlib
+    
+    missing = []
+    for pkg, import_name in REQUIRED_PACKAGES.items():
+        try:
+            importlib.import_module(import_name)
+        except ImportError:
+            missing.append(pkg)
+    
+    if missing:
+        logger.info(f"Installing missing dependencies: {', '.join(missing)}")
+        try:
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', *missing])
+        except subprocess.CalledProcessError:
+            logger.warning(f"Failed to install some packages. Install manually: pip install {' '.join(missing)}")
+
+
+def ensure_package(package_name: str):
+    """Ensure a specific package is installed"""
+    import importlib
+    
+    pkg_info = REQUIRED_PACKAGES.get(package_name.lower())
+    if not pkg_info:
+        pkg_info = package_name
+    
+    try:
+        importlib.import_module(pkg_info)
+        return True
+    except ImportError:
+        try:
+            logger.info(f"Installing {package_name}...")
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', package_name])
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
+
+# Auto-check dependencies on import
+try:
+    ensure_dependencies()
+except Exception:
+    pass
+
+
 class ConversionError(Exception):
     def __init__(self, message: str, source_format: str = None, target_format: str = None, details: str = None):
         self.source_format = source_format
