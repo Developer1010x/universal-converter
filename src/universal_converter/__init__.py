@@ -1418,6 +1418,491 @@ This document contains context for Claude Code AI assistant.
 """
 
 
+# ============ SPREADSHEET CONVERSIONS ============
+
+def csv_to_excel(csv_path: str, excel_path: str = None) -> str:
+    """Convert CSV to Excel (.xlsx)"""
+    try:
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+        if excel_path is None:
+            excel_path = csv_path.rsplit('.', 1)[0] + '.xlsx'
+        df.to_excel(excel_path, index=False)
+        return excel_path
+    except ImportError:
+        raise ConversionError("pandas and openpyxl required: pip install pandas openpyxl")
+
+
+def excel_to_csv(excel_path: str, csv_path: str = None, sheet_name: int = 0) -> str:
+    """Convert Excel to CSV"""
+    try:
+        import pandas as pd
+        df = pd.read_excel(excel_path, sheet_name=sheet_name)
+        if csv_path is None:
+            csv_path = excel_path.rsplit('.', 1)[0] + '.csv'
+        df.to_csv(csv_path, index=False)
+        return csv_path
+    except ImportError:
+        raise ConversionError("pandas and openpyxl required: pip install pandas openpyxl")
+
+
+def xls_to_xlsx(xls_path: str, xlsx_path: str = None) -> str:
+    """Convert old Excel (.xls) to new format (.xlsx)"""
+    try:
+        import pandas as pd
+        df = pd.read_excel(xls_path, engine='xlrd')
+        if xlsx_path is None:
+            xlsx_path = xls_path.rsplit('.', 1)[0] + '.xlsx'
+        df.to_excel(xlsx_path, index=False)
+        return xlsx_path
+    except ImportError:
+        raise ConversionError("pandas, xlrd, openpyxl required: pip install pandas xlrd openpyxl")
+
+
+def excel_to_json(excel_path: str, json_path: str = None, sheet_name: int = 0) -> str:
+    """Convert Excel to JSON"""
+    try:
+        import pandas as pd
+        df = pd.read_excel(excel_path, sheet_name=sheet_name)
+        if json_path is None:
+            json_path = excel_path.rsplit('.', 1)[0] + '.json'
+        df.to_json(json_path, orient='records', indent=2)
+        return json_path
+    except ImportError:
+        raise ConversionError("pandas and openpyxl required: pip install pandas openpyxl")
+
+
+def json_to_excel(json_path: str, excel_path: str = None) -> str:
+    """Convert JSON to Excel"""
+    try:
+        import pandas as pd
+        df = pd.read_json(json_path)
+        if excel_path is None:
+            excel_path = json_path.rsplit('.', 1)[0] + '.xlsx'
+        df.to_excel(excel_path, index=False)
+        return excel_path
+    except ImportError:
+        raise ConversionError("pandas and openpyxl required: pip install pandas openpyxl")
+
+
+# ============ PRESENTATION CONVERSIONS ============
+
+def text_to_pptx(text_path: str, pptx_path: str = None, title: str = "Presentation") -> str:
+    """Convert text file to PowerPoint"""
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        
+        with open(text_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        prs = Presentation()
+        slide = prs.slides.add_slide(prs.slide_layouts[0])
+        slide.shapes.title.text = title
+        
+        content_slide = prs.slides.add_slide(prs.slide_layouts[1])
+        content_slide.shapes.title.text = "Content"
+        content_slide.placeholders[1].text = content
+        
+        if pptx_path is None:
+            pptx_path = text_path.rsplit('.', 1)[0] + '.pptx'
+        
+        prs.save(pptx_path)
+        return pptx_path
+    except ImportError:
+        raise ConversionError("python-pptx required: pip install python-pptx")
+
+
+def pptx_to_pdf(pptx_path: str, pdf_path: str = None) -> str:
+    """Convert PowerPoint to PDF (requires LibreOffice)"""
+    import subprocess
+    import os
+    
+    if pdf_path is None:
+        pdf_path = pptx_path.rsplit('.', 1)[0] + '.pdf'
+    
+    cmd = ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', 
+           os.path.dirname(pdf_path), pptx_path]
+    
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        return pdf_path
+    except FileNotFoundError:
+        raise ConversionError("LibreOffice required: brew install libreoffice")
+
+
+def pptx_to_text(pptx_path: str, txt_path: str = None) -> str:
+    """Convert PowerPoint to text"""
+    try:
+        from pptx import Presentation
+        
+        prs = Presentation(pptx_path)
+        text_lines = []
+        
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    text_lines.append(shape.text)
+        
+        text_content = '\n\n'.join(text_lines)
+        
+        if txt_path is None:
+            txt_path = pptx_path.rsplit('.', 1)[0] + '.txt'
+        
+        with open(txt_path, 'w', encoding='utf-8') as f:
+            f.write(text_content)
+        
+        return txt_path
+    except ImportError:
+        raise ConversionError("python-pptx required: pip install python-pptx")
+
+
+# ============ MARKDOWN/HTML TO PDF ============
+
+def markdown_to_pdf(md_path: str, pdf_path: str = None) -> str:
+    """Convert Markdown to PDF"""
+    try:
+        import markdown
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.styles import getSampleStyleSheet
+        
+        with open(md_path, 'r', encoding='utf-8') as f:
+            md_content = f.read()
+        
+        html = markdown.markdown(md_content)
+        
+        if pdf_path is None:
+            pdf_path = md_path.rsplit('.', 1)[0] + '.pdf'
+        
+        c = canvas.Canvas(pdf_path, pagesize=letter)
+        width, height = letter
+        
+        styles = getSampleStyleSheet()
+        style = styles['Normal']
+        
+        text_object = c.beginText(50, height - 50)
+        text_object.setFont("Helvetica", 10)
+        
+        for line in html.replace('<br>', '\n').replace('<p>', '').replace('</p>', '\n').split('\n'):
+            if line.strip():
+                text_object.textLine(line[:100])
+        
+        c.drawText(text_object)
+        c.save()
+        
+        return pdf_path
+    except ImportError:
+        raise ConversionError("markdown and reportlab required: pip install markdown reportlab")
+
+
+def html_to_pdf(html_path: str, pdf_path: str = None) -> str:
+    """Convert HTML to PDF"""
+    try:
+        from weasyprint import HTML
+    except ImportError:
+        raise ConversionError("weasyprint required: pip install weasyprint")
+    
+    if pdf_path is None:
+        pdf_path = html_path.rsplit('.', 1)[0] + '.pdf'
+    
+    HTML(filename=html_path).write_pdf(pdf_path)
+    return pdf_path
+
+
+# ============ RTF CONVERSIONS ============
+
+def rtf_to_text(rtf_path: str, txt_path: str = None) -> str:
+    """Convert RTF to plain text"""
+    import re
+    
+    with open(rtf_path, 'r', encoding='utf-8', errors='ignore') as f:
+        rtf_content = f.read()
+    
+    text = rtf_content
+    text = re.sub(r'\\[a-z]+\d*\s?', '', text)
+    text = re.sub(r'[{}\\]', '', text)
+    text = text.strip()
+    
+    if txt_path is None:
+        txt_path = rtf_path.rsplit('.', 1)[0] + '.txt'
+    
+    with open(txt_path, 'w', encoding='utf-8') as f:
+        f.write(text)
+    
+    return txt_path
+
+
+def text_to_rtf(txt_path: str, rtf_path: str = None) -> str:
+    """Convert plain text to RTF"""
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    
+    rtf_content = r"{\rtf1\ansi\deff0 " + text.replace('\n', r'\par ').replace('\\', r'\\') + "}"
+    
+    if rtf_path is None:
+        rtf_path = txt_path.rsplit('.', 1)[0] + '.rtf'
+    
+    with open(rtf_path, 'w', encoding='utf-8') as f:
+        f.write(rtf_content)
+    
+    return rtf_path
+
+
+# ============ ODT CONVERSIONS ============
+
+def odt_to_text(odt_path: str, txt_path: str = None) -> str:
+    """Convert ODT to plain text"""
+    try:
+        from odf import text, teletype
+        from odf.opendocument import load
+    
+        doc = load(odt_path)
+        allparas = doc.getElementsByType(text.P)
+        content = '\n'.join(teletype.extractText(p) for p in allparas)
+        
+        if txt_path is None:
+            txt_path = odt_path.rsplit('.', 1)[0] + '.txt'
+        
+        with open(txt_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        return txt_path
+    except ImportError:
+        raise ConversionError("odfpy required: pip install odfpy")
+
+
+def text_to_odt(txt_path: str, odt_path: str = None) -> str:
+    """Convert plain text to ODT"""
+    try:
+        from odf.opendocument import Text
+        from odf.text import P
+        from odf import style
+        from odf.style import Style, TextProperties, ParagraphProperties
+        
+        with open(txt_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        doc = Text()
+        
+        bold_style = Style(name="Bold", family="text")
+        bold_style.addElement(TextProperties(fontweight="bold"))
+        doc.styles.addElement(bold_style)
+        
+        for line in content.split('\n'):
+            doc.addElement(P(text=line))
+        
+        if odt_path is None:
+            odt_path = txt_path.rsplit('.', 1)[0] + '.odt'
+        
+        doc.save(odt_path)
+        return odt_path
+    except ImportError:
+        raise ConversionError("odfpy required: pip install odfpy")
+
+
+# ============ SVG CONVERSIONS ============
+
+def svg_to_png(svg_path: str, png_path: str = None, width: int = None, height: int = None) -> str:
+    """Convert SVG to PNG"""
+    try:
+        import cairosvg
+    except ImportError:
+        raise ConversionError("cairosvg required: pip install cairosvg")
+    
+    if png_path is None:
+        png_path = svg_path.rsplit('.', 1)[0] + '.png'
+    
+    cairosvg.svg2png(url=svg_path, write_to=png_path, output_width=width, output_height=height)
+    return png_path
+
+
+def svg_to_pdf(svg_path: str, pdf_path: str = None) -> str:
+    """Convert SVG to PDF"""
+    try:
+        import cairosvg
+    except ImportError:
+        raise ConversionError("cairosvg required: pip install cairosvg")
+    
+    if pdf_path is None:
+        pdf_path = svg_path.rsplit('.', 1)[0] + '.pdf'
+    
+    cairosvg.svg2pdf(url=svg_path, write_to=pdf_path)
+    return pdf_path
+
+
+# ============ AUDIO CONVERSIONS ============
+
+def mp3_to_wav(mp3_path: str, wav_path: str = None) -> str:
+    """Convert MP3 to WAV"""
+    try:
+        from pydub import AudioSegment
+    except ImportError:
+        raise ConversionError("pydub required: pip install pydub")
+    
+    sound = AudioSegment.from_mp3(mp3_path)
+    
+    if wav_path is None:
+        wav_path = mp3_path.rsplit('.', 1)[0] + '.wav'
+    
+    sound.export(wav_path, format="wav")
+    return wav_path
+
+
+def wav_to_mp3(wav_path: str, mp3_path: str = None, bitrate: str = "192k") -> str:
+    """Convert WAV to MP3"""
+    try:
+        from pydub import AudioSegment
+    except ImportError:
+        raise ConversionError("pydub required: pip install pydub")
+    
+    sound = AudioSegment.from_wav(wav_path)
+    
+    if mp3_path is None:
+        mp3_path = wav_path.rsplit('.', 1)[0] + '.mp3'
+    
+    sound.export(mp3_path, format="mp3", bitrate=bitrate)
+    return mp3_path
+
+
+def audio_to_text(audio_path: str, language: str = "en") -> str:
+    """Convert audio to text (Speech-to-Text)"""
+    try:
+        import speech_recognition as sr
+    except ImportError:
+        raise ConversionError("SpeechRecognition required: pip install SpeechRecognition")
+    
+    recognizer = sr.Recognizer()
+    
+    if audio_path.endswith('.mp3'):
+        import io
+        from pydub import AudioSegment
+        sound = AudioSegment.from_mp3(audio_path)
+        audio_path = io.BytesIO()
+        sound.export(audio_path, format="wav")
+        audio_path.seek(0)
+        with sr.AudioFile(audio_path) as source:
+            audio_data = recognizer.record(source)
+    else:
+        with sr.AudioFile(audio_path) as source:
+            audio_data = recognizer.record(source)
+    
+    text = recognizer.recognize_google(audio_data, language=language)
+    return text
+
+
+# ============ VIDEO CONVERSIONS ============
+
+def video_to_gif(video_path: str, gif_path: str = None, fps: int = 10, width: int = None) -> str:
+    """Convert video to GIF"""
+    try:
+        from moviepy.editor import VideoFileClip
+    except ImportError:
+        raise ConversionError("moviepy required: pip install moviepy")
+    
+    clip = VideoFileClip(video_path)
+    
+    if width:
+        clip = clip.resize(width=width)
+    
+    if gif_path is None:
+        gif_path = video_path.rsplit('.', 1)[0] + '.gif'
+    
+    clip.write_gif(gif_path, fps=fps)
+    clip.close()
+    
+    return gif_path
+
+
+def video_to_audio(video_path: str, audio_path: str = None, format: str = "mp3") -> str:
+    """Extract audio from video"""
+    try:
+        from moviepy.editor import VideoFileClip
+    except ImportError:
+        raise ConversionError("moviepy required: pip install moviepy")
+    
+    clip = VideoFileClip(video_path)
+    audio = clip.audio
+    
+    if audio_path is None:
+        audio_path = video_path.rsplit('.', 1)[0] + '.' + format
+    
+    audio.write_audiofile(audio_path)
+    clip.close()
+    
+    return audio_path
+
+
+def mp4_to_avi(mp4_path: str, avi_path: str = None) -> str:
+    """Convert MP4 to AVI"""
+    try:
+        from moviepy.editor import VideoFileClip
+    except ImportError:
+        raise ConversionError("moviepy required: pip install moviepy")
+    
+    clip = VideoFileClip(mp4_path)
+    
+    if avi_path is None:
+        avi_path = mp4_path.rsplit('.', 1)[0] + '.avi'
+    
+    clip.write_videofile(avi_path, codec='rawvideo', audio_codec='pcm_s16le')
+    clip.close()
+    
+    return avi_path
+
+
+def avi_to_mp4(avi_path: str, mp4_path: str = None) -> str:
+    """Convert AVI to MP4"""
+    try:
+        from moviepy.editor import VideoFileClip
+    except ImportError:
+        raise ConversionError("moviepy required: pip install moviepy")
+    
+    clip = VideoFileClip(avi_path)
+    
+    if mp4_path is None:
+        mp4_path = avi_path.rsplit('.', 1)[0] + '.mp4'
+    
+    clip.write_videofile(mp4_path, codec='libx264')
+    clip.close()
+    
+    return mp4_path
+
+
+# ============ RAR ARCHIVE ============
+
+def extract_rar(rar_path: str, extract_to: str = None) -> str:
+    """Extract RAR archive"""
+    try:
+        import rarfile
+    except ImportError:
+        raise ConversionError("rarfile required: pip install rarfile")
+    
+    if extract_to is None:
+        extract_to = rar_path.rsplit('.', 1)[0] + '_extracted'
+    
+    Path(extract_to).mkdir(parents=True, exist_ok=True)
+    
+    with rarfile.RarFile(rar_path) as rf:
+        rf.extractall(extract_to)
+    
+    return extract_to
+
+
+def create_rar(files: List[str], rar_path: str) -> str:
+    """Create RAR archive"""
+    try:
+        import rarfile
+    except ImportError:
+        raise ConversionError("rarfile required: pip install rarfile")
+    
+    with rarfile.RarFile(rar_path, 'w') as rf:
+        for f in files:
+            rf.write(f)
+    
+    return rar_path
+
+
 # ============ MAIN CLI ============
 
 def main():
