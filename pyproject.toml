@@ -61,6 +61,22 @@ dependencies = [
     "pytesseract",
     "pdf2image",
     "msgpack",
+    "sentence-transformers",
+    "tiktoken",
+    "openai-whisper",
+    "gtts",
+    "pyttsx3",
+    "boto3",
+    "google-cloud-storage",
+    "azure-storage-blob",
+    "eth-account",
+    "web3",
+    "biopython",
+    "ezdxf",
+    "kafka-python",
+    "redis",
+    "paho-mqtt",
+    "pyx12",
 ]
 
 [project.optional-dependencies]
