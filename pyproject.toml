@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "universal-converter"
+version = "1.0.0"
+description = "Convert anything to anything - data, documents, images, archives"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Prajwall Narayana", email = "sprajwalln.cs21@rvce.edu.in"}
+]
+keywords = ["converter", "convert", "format", "transform", "utility"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+full = ["pillow", "PyPDF2", "reportlab", "python-docx"]
+dev = ["pytest", "pytest-cov", "black", "flake8", "mypy"]
+
+[project.urls]
+Homepage = "https://github.com/Developer1010x/universal-converter"
+Repository = "https://github.com/Developer1010x/universal-converter"
+Issues = "https://github.com/Developer1010x/universal-converter/issues"
+
+[project.scripts]
+universal-convert = "universal_converter:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
