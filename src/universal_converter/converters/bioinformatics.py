@@ -15,7 +15,7 @@ class BioinformaticsConverter(BaseConverter):
         "genbank": ["fasta", "json"],
         "bed": ["bigbed", "vcf"],
         "vcf": ["bed", "json"],
-", "bcf        "bcf": ["vcf"],
+        "bcf": ["vcf"],
         "sam": ["bam", "cram"],
         "bam": ["sam", "cram"],
     }

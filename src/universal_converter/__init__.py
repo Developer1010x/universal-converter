@@ -55,6 +55,10 @@ def __getattr__(name: str):
             raise ConversionError(result.error)
         return resize_image
     
+    if name in ("find_converter", "can_convert", "list_conversions", "detect_format", "ConverterRegistry"):
+        from . import registry
+        return getattr(registry, name)
+
     # Placeholder for future converters - raises helpful error
     _future_converters = {"resize_image", "convert_audio", "convert_video", "convert_document"}
     if name in _future_converters:
@@ -77,6 +81,11 @@ __all__ = [
     "find_executable",
     "run_command",
     "get_platform_info",
+    "ConverterRegistry",
+    "find_converter",
+    "can_convert",
+    "list_conversions",
+    "detect_format",
 ]
 
 
@@ -93,11 +102,15 @@ def main():
     args = parser.parse_args()
     
     if args.list:
-        print("Universal Converter supports:")
-        print("  - Data: json, csv, xml, yaml, txt")
-        print("  - Images: png, jpg, gif, bmp, tiff, webp")
-        print("  - Documents: pdf, docx, md, html")
-        print("  Install extras for more: pip install universal-converter[all]")
+        from . import registry
+        conversions = registry.list_conversions()
+        if conversions:
+            print("Universal Converter supported conversions:")
+            for src, targets in conversions.items():
+                print(f"  {src:>8} -> {', '.join(targets)}")
+        else:
+            print("No converters discovered.")
+        print("\nInstall extras for more: pip install universal-converter[all]")
         return
     
     if args.input:

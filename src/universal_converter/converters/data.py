@@ -73,22 +73,49 @@ class DataConverter(BaseConverter):
             return self._to_yaml(data)
         elif to_fmt == 'txt':
             return self._to_text(data)
+        elif to_fmt == 'tsv':
+            return self._to_csv(data, delimiter='\t')
+        elif to_fmt == 'html':
+            return self._to_html(data)
         return str(data)
     
-    def _to_csv(self, data: Union[Dict, List]) -> str:
+    def _to_csv(self, data: Union[Dict, List], delimiter: str = ',') -> str:
         if isinstance(data, dict):
             data = [data] if data else []
         if not data:
             return ""
-        
+
         keys = list(data[0].keys()) if isinstance(data[0], dict) else ['value']
-        rows = [','.join(keys)]
+        rows = [delimiter.join(keys)]
         for item in data:
             if isinstance(item, dict):
-                rows.append(','.join(str(item.get(k, '')) for k in keys))
+                rows.append(delimiter.join(str(item.get(k, '')) for k in keys))
             else:
                 rows.append(str(item))
         return '\n'.join(rows)
+
+    def _to_html(self, data: Any) -> str:
+        """Render data as a minimal, self-contained HTML document."""
+        from html import escape
+
+        def render(value: Any) -> str:
+            if isinstance(value, dict):
+                cells = ''.join(
+                    f"<tr><th>{escape(str(k))}</th><td>{render(v)}</td></tr>"
+                    for k, v in value.items()
+                )
+                return f"<table>{cells}</table>"
+            if isinstance(value, list):
+                items = ''.join(f"<li>{render(v)}</li>" for v in value)
+                return f"<ul>{items}</ul>"
+            return escape(str(value)) if value is not None else ''
+
+        return (
+            "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\">"
+            "<style>table{border-collapse:collapse}"
+            "th,td{border:1px solid #ccc;padding:4px;text-align:left}</style>"
+            "</head><body>\n" + render(data) + "\n</body></html>"
+        )
     
     def _to_xml(self, data: Any) -> str:
         root = ET.Element('root')

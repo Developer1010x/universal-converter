@@ -48,6 +48,7 @@ universal_converter/
 │   ├── gis.py
 │   ├── network.py
 │   └── database.py
+├── registry.py         # Converter discovery & capability lookup
 └── utils/
     └── platform.py     # System utilities
 ```
@@ -74,13 +75,40 @@ converter = DataConverter()
 result = converter.convert(task)
 ```
 
+### Discovering conversions (registry)
+
+The package ships a dependency-free registry that auto-discovers every
+converter and answers capability questions without importing heavy optional
+dependencies:
+
+```python
+from universal_converter import (
+    can_convert, find_converter, list_conversions, detect_format,
+)
+
+# Is a conversion supported?
+can_convert('json', 'csv')          # -> True
+
+# Which converter class handles a pair?
+find_converter('json', 'html')      # -> <class 'DataConverter'>
+
+# Infer the canonical format from a path (handles aliases like .yml -> yaml)
+detect_format('config.YML')         # -> 'yaml'
+
+# Full {source: [targets...]} capability map across all converters
+conversions = list_conversions()
+```
+
+The same data backs the CLI's `--list` output. For finer control use the
+`ConverterRegistry` class directly (e.g. `registry.targets_for('json')`).
+
 ### Command Line
 
 ```bash
 # Convert a file
 python -m universal_converter input.json -t csv -o output.csv
 
-# List supported formats
+# List all supported conversions (generated from the registry)
 python -m universal_converter -l
 ```
 
