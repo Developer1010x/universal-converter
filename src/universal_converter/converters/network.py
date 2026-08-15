@@ -1,204 +1,291 @@
-"""Network and web format conversion module"""
+"""Markup and web-format converters (HTML, Markdown, plain text, URLs).
 
+Format names here use the registry's canonical spelling (``md``, ``txt``) --
+declaring ``markdown``/``text`` instead would make these pairs unreachable from
+any lookup that goes through :func:`~universal_converter.registry.detect_format`,
+which normalises the aliases.
+"""
+
+import html as html_module
+import re
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from . import BaseConverter, ConversionTask, ConversionResult
+from . import BaseConverter, ConversionResult, ConversionTask
 
 
 class NetworkConverter(BaseConverter):
-    """Converter for network and web file formats"""
-    
+    """Converter for HTML / Markdown / plain text and URL introspection."""
+
     SUPPORTED_CONVERSIONS = {
-        "html": ["markdown", "text", "json"],
-        "markdown": ["html", "text"],
-        "text": ["html", "markdown"],
-        "xml": ["json", "yaml"],
-        "json": ["yaml", "xml", "toml"],
+        "html": ["md", "txt"],
+        "md": ["html", "txt"],
+        "txt": ["html", "md"],
         "url": ["json"],
     }
-    PRIORITY = 10
-    
+    PRIORITY = 30
+
     def convert(self, task: ConversionTask) -> ConversionResult:
         source = task.source_format.lower()
         target = task.target_format.lower()
-        
+
         try:
-            if source == "html" and target in ["markdown", "text"]:
-                return self._html_convert(task)
-            elif source == "markdown" and target == "html":
-                return self._markdown_to_html(task)
-            elif source in ["xml", "json"] and target in ["json", "yaml", "xml"]:
-                return self._data_convert(task)
-            elif source == "url":
+            if source == "html" and target in ("md", "txt"):
+                return self._from_html(task)
+            if source == "md" and target in ("html", "txt"):
+                return self._from_markdown(task)
+            if source == "txt" and target in ("html", "md"):
+                return self._from_text(task)
+            if source == "url" and target == "json":
                 return self._url_convert(task)
-            
-            return ConversionResult(success=False, error=f"Unsupported: {source} → {target}")
-        except Exception as e:
-            return ConversionResult(success=False, error=str(e))
-    
-    def _html_convert(self, task: ConversionTask) -> ConversionResult:
-        import re
-        
-        content = task.source_path.read_text()
-        
-        text = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<[^>]+>', '', text)
-        text = re.sub(r'\n\s*\n', '\n\n', text)
-        text = text.strip()
-        
-        if task.target_format == "markdown":
-            text = self._html_to_md(text)
-        
-        task.target_path.write_text(text)
+
+            return ConversionResult(
+                success=False, error=f"Unsupported: {source} -> {target}"
+            )
+        except Exception as exc:
+            return ConversionResult(success=False, error=str(exc))
+
+    # --- html ------------------------------------------------------------
+
+    def _from_html(self, task: ConversionTask) -> ConversionResult:
+        content = Path(task.source_path).read_text(encoding="utf-8")
+        if task.target_format.lower() == "md":
+            out = self.html_to_markdown(content)
+        else:
+            out = self.html_to_text(content)
+        Path(task.target_path).write_text(out + "\n", encoding="utf-8")
         return ConversionResult(success=True, output_path=str(task.target_path))
-    
-    def _html_to_md(self, html: str) -> str:
-        import re
-        
-        md = html
-        md = re.sub(r'<h1[^>]*>(.*?)</h1>', r'# \1\n', md, flags=re.DOTALL)
-        md = re.sub(r'<h2[^>]*>(.*?)</h2>', r'## \1\n', md, flags=re.DOTALL)
-        md = re.sub(r'<h3[^>]*>(.*?)</h3>', r'### \1\n', md, flags=re.DOTALL)
-        md = re.sub(r'<strong[^>]*>(.*?)</strong>', r'**\1**', md, flags=re.DOTALL)
-        md = re.sub(r'<b[^>]*>(.*?)</b>', r'**\1**', md, flags=re.DOTALL)
-        md = re.sub(r'<em[^>]*>(.*?)</em>', r'*\1*', md, flags=re.DOTALL)
-        md = re.sub(r'<i[^>]*>(.*?)</i>', r'*\1*', md, flags=re.DOTALL)
-        md = re.sub(r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>', r'[\2](\1)', md, flags=re.DOTALL)
-        md = re.sub(r'<br\s*/?>', '\n', md, flags=re.IGNORECASE)
-        md = re.sub(r'<p[^>]*>(.*?)</p>', r'\1\n\n', md, flags=re.DOTALL)
-        md = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1\n', md, flags=re.DOTALL)
-        md = re.sub(r'<code[^>]*>(.*?)</code>', r'`\1`', md, flags=re.DOTALL)
-        md = re.sub(r'<pre[^>]*>(.*?)</pre>', r'```\n\1\n```', md, flags=re.DOTALL)
-        md = re.sub(r'<[^>]+>', '', md)
-        
+
+    @staticmethod
+    def _strip_noise(html: str) -> str:
+        html = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I)
+        html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.I)
+        return re.sub(r"<!--.*?-->", "", html, flags=re.DOTALL)
+
+    @classmethod
+    def html_to_text(cls, html: str) -> str:
+        """Strip tags and collapse blank runs, leaving readable plain text."""
+        text = cls._strip_noise(html)
+        text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+        text = re.sub(r"</(p|div|li|h[1-6]|tr)>", "\n", text, flags=re.I)
+        text = re.sub(r"<[^>]+>", "", text)
+        text = html_module.unescape(text)
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
+        return "\n".join(line.strip() for line in text.splitlines()).strip()
+
+    @staticmethod
+    def _table_to_markdown(match: "re.Match") -> str:
+        """Turn one ``<table>`` into a GitHub-flavoured Markdown table."""
+        rows = []
+        for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", match.group(1), re.DOTALL | re.I):
+            cells = re.findall(
+                r"<t([hd])[^>]*>(.*?)</t\1>", row_html, re.DOTALL | re.I
+            )
+            if cells:
+                rows.append(
+                    [
+                        (
+                            kind.lower(),
+                            html_module.unescape(
+                                re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))
+                            ).strip().replace("|", r"\|"),
+                        )
+                        for kind, text in cells
+                    ]
+                )
+        if not rows:
+            return ""
+
+        width = max(len(row) for row in rows)
+        # A leading all-<th> row is the header; otherwise synthesise one, since
+        # Markdown tables cannot start straight at the body.
+        if all(kind == "h" for kind, _ in rows[0]) and len(rows) > 1:
+            header = [text for _, text in rows[0]]
+            body = rows[1:]
+        else:
+            header = [f"col{i + 1}" for i in range(width)]
+            body = rows
+        header += [""] * (width - len(header))
+
+        lines = [
+            "| " + " | ".join(header) + " |",
+            "|" + "|".join([" --- "] * width) + "|",
+        ]
+        for row in body:
+            cells = [text for _, text in row] + [""] * (width - len(row))
+            lines.append("| " + " | ".join(cells) + " |")
+        return "\n\n" + "\n".join(lines) + "\n\n"
+
+    @classmethod
+    def html_to_markdown(cls, html: str) -> str:
+        """Convert the common inline/block HTML subset to Markdown."""
+        md = cls._strip_noise(html)
+        md = re.sub(r"<head[^>]*>.*?</head>", "", md, flags=re.DOTALL | re.I)
+        md = re.sub(
+            r"<table[^>]*>(.*?)</table>", cls._table_to_markdown, md, flags=re.DOTALL | re.I
+        )
+        for level in range(1, 7):
+            md = re.sub(
+                rf"<h{level}[^>]*>(.*?)</h{level}>",
+                lambda m, lv=level: f"\n{'#' * lv} {m.group(1).strip()}\n",
+                md,
+                flags=re.DOTALL | re.I,
+            )
+        md = re.sub(r"<(strong|b)[^>]*>(.*?)</\1>", r"**\2**", md, flags=re.DOTALL | re.I)
+        md = re.sub(r"<(em|i)[^>]*>(.*?)</\1>", r"*\2*", md, flags=re.DOTALL | re.I)
+        md = re.sub(r"<pre[^>]*>(.*?)</pre>", r"\n```\n\1\n```\n", md, flags=re.DOTALL | re.I)
+        md = re.sub(r"<code[^>]*>(.*?)</code>", r"`\1`", md, flags=re.DOTALL | re.I)
+        md = re.sub(
+            r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>', r"[\2](\1)", md, flags=re.DOTALL | re.I
+        )
+        md = re.sub(r"<li[^>]*>(.*?)</li>", r"- \1\n", md, flags=re.DOTALL | re.I)
+        md = re.sub(r"<br\s*/?>", "  \n", md, flags=re.I)
+        md = re.sub(r"<p[^>]*>(.*?)</p>", r"\n\1\n", md, flags=re.DOTALL | re.I)
+        md = re.sub(r"<[^>]+>", "", md)
+        md = html_module.unescape(md)
+        md = re.sub(r"[ \t]+\n", "\n", md)
+        md = re.sub(r"\n{3,}", "\n\n", md)
         return md.strip()
-    
-    def _markdown_to_html(self, task: ConversionTask) -> ConversionResult:
-        content = task.source_path.read_text()
-        
-        import re
-        html = content
-        html = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
-        html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
-        html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
-        html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-        html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
-        html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', html)
-        html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
-        
-        full_html = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Converted</title></head>
-<body>
-{html}
-</body>
-</html>"""
-        
-        task.target_path.write_text(full_html)
-        return ConversionResult(success=True, output_path=str(task.target_path))
-    
-    def _data_convert(self, task: ConversionTask) -> ConversionResult:
-        import json
-        import yaml
-        
-        content = task.source_path.read_text()
-        
-        if task.source_format == "json":
-            data = json.loads(content)
-        elif task.source_format == "xml":
-            data = self._xml_to_dict(content)
+
+    # --- markdown --------------------------------------------------------
+
+    def _from_markdown(self, task: ConversionTask) -> ConversionResult:
+        content = Path(task.source_path).read_text(encoding="utf-8")
+        if task.target_format.lower() == "html":
+            out = self.markdown_to_html(content)
         else:
-            return ConversionResult(success=False, error="Unknown source format")
-        
-        if task.target_format == "json":
-            task.target_path.write_text(json.dumps(data, indent=2))
-        elif task.target_format == "yaml":
-            task.target_path.write_text(yaml.dump(data))
-        elif task.target_format == "xml":
-            xml = self._dict_to_xml(data)
-            task.target_path.write_text(xml)
-        
+            out = self.markdown_to_text(content)
+        Path(task.target_path).write_text(out + "\n", encoding="utf-8")
         return ConversionResult(success=True, output_path=str(task.target_path))
-    
-    def _xml_to_dict(self, xml_str: str) -> Dict:
-        import xml.etree.ElementTree as ET
-        
-        root = ET.fromstring(xml_str)
-        return {root.tag: self._parse_element(root)}
-    
-    def _parse_element(self, element) -> Any:
-        result = {}
-        if element.text and element.text.strip():
-            return element.text.strip()
-        
-        for child in element:
-            child_data = self._parse_element(child)
-            if child.tag in result:
-                if not isinstance(result[child.tag], list):
-                    result[child.tag] = [result[child.tag]]
-                result[child.tag].append(child_data)
+
+    @staticmethod
+    def markdown_to_html(markdown: str) -> str:
+        """Render the common Markdown subset (headings, emphasis, code,
+        links, lists, paragraphs) as a standalone HTML document."""
+        out_lines = []
+        in_list = False
+        in_code = False
+
+        def inline(text: str) -> str:
+            text = html_module.escape(text, quote=False)
+            text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+            text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", text)
+            text = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', text)
+            return text
+
+        for raw in markdown.splitlines():
+            if raw.strip().startswith("```"):
+                if in_list:
+                    out_lines.append("</ul>")
+                    in_list = False
+                out_lines.append("</pre>" if in_code else "<pre>")
+                in_code = not in_code
+                continue
+            if in_code:
+                out_lines.append(html_module.escape(raw))
+                continue
+
+            line = raw.rstrip()
+            heading = re.match(r"^(#{1,6})\s+(.*)$", line)
+            bullet = re.match(r"^\s*[-*+]\s+(.*)$", line)
+
+            if bullet:
+                if not in_list:
+                    out_lines.append("<ul>")
+                    in_list = True
+                out_lines.append(f"<li>{inline(bullet.group(1))}</li>")
+                continue
+            if in_list:
+                out_lines.append("</ul>")
+                in_list = False
+
+            if heading:
+                level = len(heading.group(1))
+                out_lines.append(f"<h{level}>{inline(heading.group(2))}</h{level}>")
+            elif not line.strip():
+                continue
             else:
-                result[child.tag] = child_data
-        
-        return result if result else None
-    
-    def _dict_to_xml(self, data: Dict, root_tag: str = "root") -> str:
-        import xml.etree.ElementTree as ET
-        
-        root = ET.Element(root_tag)
-        self._build_element(root, data)
-        
-        return ET.tostring(root, encoding='unicode')
-    
-    def _build_element(self, parent, data):
-        import xml.etree.ElementTree as ET
-        
-        if isinstance(data, dict):
-            for key, value in data.items():
-                child = ET.SubElement(parent, key)
-                self._build_element(child, value)
-        elif isinstance(data, list):
-            for item in data:
-                child = ET.SubElement(parent, "item")
-                self._build_element(child, item)
+                out_lines.append(f"<p>{inline(line)}</p>")
+
+        if in_list:
+            out_lines.append("</ul>")
+        if in_code:
+            out_lines.append("</pre>")
+
+        body = "\n".join(out_lines)
+        return (
+            '<!DOCTYPE html>\n<html lang="en">\n<head><meta charset="utf-8">'
+            "<title>Converted</title></head>\n<body>\n"
+            f"{body}\n</body>\n</html>"
+        )
+
+    @classmethod
+    def markdown_to_text(cls, markdown: str) -> str:
+        """Flatten Markdown to plain prose by rendering then stripping tags."""
+        return cls.html_to_text(cls.markdown_to_html(markdown))
+
+    # --- plain text ------------------------------------------------------
+
+    def _from_text(self, task: ConversionTask) -> ConversionResult:
+        content = Path(task.source_path).read_text(encoding="utf-8")
+        if task.target_format.lower() == "html":
+            out = self.text_to_html(content)
         else:
-            parent.text = str(data)
-    
+            # Escape the characters that would otherwise be read as markup.
+            out = re.sub(r"([\\`*_\[\]#])", r"\\\1", content)
+        Path(task.target_path).write_text(out + "\n", encoding="utf-8")
+        return ConversionResult(success=True, output_path=str(task.target_path))
+
+    @staticmethod
+    def text_to_html(text: str) -> str:
+        """Wrap plain text in a minimal HTML document, one <p> per block."""
+        blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
+        body = "\n".join(
+            "<p>" + html_module.escape(b).replace("\n", "<br>\n") + "</p>"
+            for b in blocks
+        )
+        return (
+            '<!DOCTYPE html>\n<html lang="en">\n<head><meta charset="utf-8">'
+            "<title>Converted</title></head>\n<body>\n"
+            f"{body}\n</body>\n</html>"
+        )
+
+    # --- urls ------------------------------------------------------------
+
     def _url_convert(self, task: ConversionTask) -> ConversionResult:
         import json
-        from urllib.parse import urlparse, parse_qs
-        
-        content = task.source_path.read_text().strip()
-        
-        if not content.startswith(('http://', 'https://')):
-            parsed = urlparse(content)
-        else:
-            parsed = urlparse(content)
-        
-        url_data = {
+        from urllib.parse import parse_qs, urlparse
+
+        content = Path(task.source_path).read_text(encoding="utf-8").strip()
+        parsed = urlparse(content)
+
+        url_data: Dict[str, Any] = {
+            "url": content,
             "scheme": parsed.scheme,
             "netloc": parsed.netloc,
+            "hostname": parsed.hostname,
+            "port": parsed.port,
             "path": parsed.path,
             "params": parsed.params,
             "query": parse_qs(parsed.query),
-            "fragment": parsed.fragment
+            "fragment": parsed.fragment,
         }
-        
-        task.target_path.write_text(json.dumps(url_data, indent=2))
+
+        Path(task.target_path).write_text(
+            json.dumps(url_data, indent=2), encoding="utf-8"
+        )
         return ConversionResult(success=True, output_path=str(task.target_path))
-    
-    def convert_format(self, path: str, to_format: str, output: Optional[str] = None) -> ConversionResult:
+
+    def convert_format(
+        self, path: str, to_format: str, output: Optional[str] = None
+    ) -> ConversionResult:
+        """Convert a markup file to ``to_format``."""
         task = ConversionTask(
             source_path=Path(path),
             target_path=Path(output or Path(path).with_suffix(f".{to_format}")),
             source_format=Path(path).suffix[1:],
-            target_format=to_format
+            target_format=to_format,
         )
         return self.convert(task)
-
-
-class HTTPConverter(NetworkConverter):
-    """Converter for HTTP formats"""
-    pass

@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {"type": "Feature", "properties": {"name": "Vidhana Soudha"},
+     "geometry": {"type": "Point", "coordinates": [77.5906, 12.9794]}},
+    {"type": "Feature", "properties": {"name": "Lalbagh"},
+     "geometry": {"type": "Point", "coordinates": [77.5848, 12.9507]}},
+    {"type": "Feature", "properties": {"name": "Outer Ring Road"},
+     "geometry": {"type": "LineString", "coordinates": [[77.55, 12.90], [77.70, 12.95], [77.68, 13.05]]}}
+  ]
+}

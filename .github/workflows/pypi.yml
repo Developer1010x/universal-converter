@@ -23,7 +23,11 @@ jobs:
         run: python -m build
 
       - name: Check package
-        run: pip install dist/*.whl && python -c "import universal_converter"
+        run: |
+          pip install "$(echo dist/*.whl)[all,dev]"
+          python -c "import universal_converter; print(universal_converter.__version__)"
+          universal-convert --list
+          pytest -q
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -46,7 +50,7 @@ jobs:
           name: dist
           path: dist/
 
+      # Trusted publishing via the id-token permission above; passing an API
+      # token as well would override OIDC and defeat the point.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}

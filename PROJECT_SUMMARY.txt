@@ -2,305 +2,128 @@
                     UNIVERSAL CONVERTER - PROJECT SUMMARY
 ================================================================================
 
-PROJECT NAME: Universal Converter
 REPOSITORY: https://github.com/Developer1010x/universal-converter
-AUTHOR: Prajwall Narayana
-EMAIL: sprajwalln.cs21@rvce.edu.in
+AUTHOR:     Prajwall Narayana
+VERSION:    1.1.0
+LICENSE:    MIT
+
+Every figure below is printed by a command in the repo. Run
+`universal-convert --list` and `universal-convert --doctor` to reproduce them.
 
 ================================================================================
-GOAL
+WHAT IT IS
 ================================================================================
 
-Create the most comprehensive Python conversion library that converts "anything 
-to anything" - covering all possible file formats, data types, and domains with:
+A file-conversion library where the converters form a graph rather than a
+lookup table. 198 format pairs are implemented directly. Another 234 are
+reached by chaining converters via breadth-first search over the registry's
+adjacency map, so `csv -> pdf` works without anyone implementing it:
 
-- 100+ conversion functions
-- 50+ optional dependencies (auto-installed by default)
-- OS-neutral (works on Windows, Mac, Linux)
-- Auto-installs missing dependencies on import
-- Simple Python API + Command Line Interface
+    $ universal-convert cities.csv -t pdf
+    converted cities.pdf  via csv -> html -> pdf
+
+That routing is the reason this exists. Single-hop conversion is already owned
+by pandoc, ffmpeg and Pillow; automatic multi-hop planning over a plugin
+registry is not.
 
 ================================================================================
 FILE STRUCTURE
 ================================================================================
 
 universal-converter/
-├── src/
-│   └── universal_converter/
-│       └── __init__.py       # Main library (all conversion functions)
-├── pyproject.toml            # Package config (50+ dependencies)
-├── README.md                 # Documentation
-├── LICENSE                   # MIT License
-└── .gitignore               # Git ignore rules
+├── src/universal_converter/
+│   ├── __init__.py          # public API + CLI (convert, --list, --doctor, --route)
+│   ├── registry.py          # discovery, priority ordering, BFS route planning
+│   ├── pipeline.py          # route execution with temporary intermediates
+│   ├── converters/
+│   │   ├── __init__.py      # BaseConverter ABC + lazy re-export of converters
+│   │   ├── data.py          # json, csv, tsv, xml, yaml, txt, html, md   (29 pairs)
+│   │   ├── images.py        # png, jpg, gif, bmp, tiff, webp             (30 pairs)
+│   │   ├── audio.py         # mp3, wav, flac, ogg, aac, m4a              (30 pairs)
+│   │   ├── video.py         # mp4, avi, mkv, mov, webm, flv, wmv         (42 pairs)
+│   │   ├── documents.py     # pdf, docx, txt, md, html                   (12 pairs)
+│   │   ├── database.py      # sqlite, db, sql, xlsx                      (12 pairs)
+│   │   ├── cloud.py         # tf, tfvars, json, yaml, toml, env          (14 pairs)
+│   │   ├── bioinformatics.py# fasta, fastq, genbank, bed, vcf            (11 pairs)
+│   │   ├── gis.py           # geojson, kml, gpx, csv                      (9 pairs)
+│   │   ├── network.py       # html, md, txt, url                          (7 pairs)
+│   │   └── ai.py            # pt/pth -> onnx                              (2 pairs)
+│   └── utils/platform.py    # executable lookup, subprocess wrapper
+├── tests/                   # 78 tests: round-trip, golden-property, CLI
+├── pyproject.toml           # 7 optional-dependency groups, 8 packages, all imported
+└── README.md
 
 ================================================================================
-WHAT'S BEEN IMPLEMENTED (100+ Conversions)
+ARCHITECTURE
 ================================================================================
 
-1. DATA FORMATS
-   - JSON, CSV, TSV, XML, YAML, INI, TOML, Parquet
+1. REGISTRY-DRIVEN DISPATCH
+   pkgutil walks converters/, collects every concrete BaseConverter subclass,
+   and caches the result. PRIORITY orders competitors - lower wins - so
+   ImageConverter (10) beats the generic DataConverter (50) on a shared pair.
+   Nothing in the CLI or the public API names a converter class.
 
-2. DOCUMENTS
-   - PDF, DOCX, TXT, HTML, Markdown, RTF, ODT
+2. MULTI-HOP ROUTING
+   supported_conversions() returns {source: [targets]}, which is an adjacency
+   list. find_route() BFSes it, so the first path found has the fewest hops.
+   Intermediates go to a TemporaryDirectory; only the last step writes to the
+   destination. Routing skips edges whose dependencies are missing.
 
-3. SPREADSHEETS
-   - CSV ↔ Excel (XLSX, XLS)
-   - Excel ↔ JSON
-   - CSV ↔ Parquet
+3. LAZY OPTIONAL DEPENDENCIES
+   Every optional import sits inside a method. Importing the package, or the
+   registry, pulls in nothing heavy. A missing package therefore shortens what
+   --doctor reports as ready, never what --list advertises.
 
-4. DATABASES
-   - SQLite → JSON, CSV, MySQL, PostgreSQL
-   - MySQL/PostgreSQL dump parsing
-
-5. IMAGES
-   - PNG, JPG, JPEG, GIF, BMP, TIFF, WebP, ICO, SVG
-   - Resize, convert formats
-   - OCR (Image to Text)
-
-6. ARCHIVES
-   - ZIP, TAR, GZ, BZ2, RAR
-   - Encrypted ZIP
-
-7. PRESENTATIONS
-   - Text → PPTX
-   - PPTX → PDF, TXT
-
-8. AUDIO
-   - MP3 ↔ WAV
-   - Audio → Text (Speech-to-Text)
-   - Text → Speech (TTS)
-
-9. VIDEO
-   - MP4 ↔ AVI
-   - Video → GIF
-   - Video → Audio
-
-10. WEB & API
-    - HTML ↔ Text, Markdown
-    - XML ↔ Dict
-    - URL → File Download
-
-11. ENCODING
-    - Base64, Hex, URL, HTML encode/decode
-
-12. COLOR FORMATS
-    - HEX ↔ RGB ↔ HSL
-
-13. DATE/TIME
-    - Unix timestamp ↔ ISO 8601 ↔ Human readable
-
-14. CASE CONVERSIONS
-    - camelCase, snake_case, kebab-case, PascalCase, SCREAMING_SNAKE_CASE
-
-15. UNITS
-    - Length, weight, temperature, volume, data
-
-16. HASH FUNCTIONS
-    - MD5, SHA1, SHA256, SHA512
-
-17. SERIALIZATION
-    - JSON, Pickle, MessagePack, TOML
-
-18. SCIENTIFIC DATA
-    - NumPy arrays
-    - HDF5 files
-    - MATLAB (.mat) files
-    - FASTA/GenBank (Bioinformatics)
-
-19. ENCRYPTION & ENCODING
-    - QR Code generation & reading
-    - Password hashing (bcrypt, argon2)
-    - JWT encode/decode
-
-20. EBOOKS
-    - EPUB ↔ Text
-
-21. ADVANCED UNITS
-    - Unit conversion (pint)
-    - Currency conversion
-
-22. AI / NLP
-    - Text → Embeddings
-    - Text → Tokens
-    - Audio → Transcription (Whisper)
-    - Text → Speech (TTS)
-
-23. CLOUD STORAGE
-    - AWS S3 upload/download
-    - Google Cloud Storage upload/download
-    - Azure Blob upload/download
-
-24. BLOCKCHAIN
-    - Ethereum key pair generation
-    - Private key → Address
-    - Keccak-256 hash
-
-25. BIOINFORMATICS
-    - FASTA ↔ Dict
-    - GenBank → FASTA
-
-26. CONTAINERS
-    - Dockerfile → Image
-    - Image ↔ TAR
-
-27. STREAMING
-    - Kafka produce/consume
-    - Redis set/get
-    - MQTT publish
-
-28. CAD/GRAPHICS
-    - DXF → SVG
-    - OBJ ↔ STL
-    - GLTF → OBJ
-
-29. GEOSPATIAL / GIS
-    - GeoJSON ↔ KML
-    - Shapefile → GeoJSON
-    - WKT ↔ GeoJSON
-    - Coordinates → GeoJSON
-
-30. FONTS
-    - TTF ↔ Base64
-    - Font info extraction
-
-31. CALENDAR
-    - ICS ↔ Dict (events)
-
-32. EMAIL
-    - EML → Text/Dict
-    - MSG → Text
-
-33. FINANCE
-    - CSV → TradingView format
-    - Crypto data → CSV
-
-34. CONFIGURATION
-    - ENV ↔ Dict ↔ JSON
-    - Properties files
-
-35. NETWORK
-    - PCAP → JSON (packet analysis)
-
-36. PROTOCOL BUFFERS
-    - Protocol Buffers → Dict
-    - JSON Schema generation
+4. HONEST CAPABILITY REPORTING
+   --doctor checks each pair's Python imports and external binaries, and prints
+   how many pairs each missing package would unlock. A test walks the whole
+   registry and fails if any advertised pair answers "unsupported".
 
 ================================================================================
-DEPENDENCIES (50+)
+DEPENDENCIES
 ================================================================================
 
-Core:
-- pillow, PyPDF2, reportlab, python-docx, pandas, openpyxl, xlrd,
-- python-pptx, markdown, weasyprint, odfpy, cairosvg, pydub,
-- SpeechRecognition, moviepy, rarfile, pyzipper, beautifulsoup4,
-- html2text, requests, xmltodict, numpy, scipy, h5py, pyarrow,
-- qrcode, pyzbar, bcrypt, argon2, PyJWT, ebooklib, pint,
-- forex-python, pytesseract, pdf2image, msgpack
+Core: none.
 
-AI/NLP:
-- sentence-transformers, tiktoken, openai-whisper, gtts, pyttsx3
+Optional, one group per capability, every package imported by code in src/:
+  data   PyYAML                     toml   tomli-w (+ tomli on <3.11)
+  images Pillow                     docx   python-docx
+  pdf    pypdf, reportlab           xlsx   openpyxl
+  torch  torch, onnx (excluded from [all]: multi-gigabyte download)
 
-Cloud:
-- boto3, google-cloud-storage, azure-storage-blob
-
-Blockchain:
-- eth-account, web3
-
-Bioinformatics:
-- biopython
-
-Graphics/CAD:
-- ezdxf, trimesh, fonttools
-
-Streaming:
-- kafka-python, redis, paho-mqtt
-
-Other:
-- geopandas, shapely, scapy, protobuf, extract-msg, pyx12
+External: the ffmpeg binary unlocks 72 audio/video pairs. It is a system
+package; pip cannot install it, and the error messages say so.
 
 ================================================================================
-USAGE
+CHANGES IN 1.1.0
 ================================================================================
 
-# Install
-pip install universal-converter
+Fixed
+  - All 72 audio/video pairs raised TypeError: run_command returns a
+    CompletedProcess and every media call site subscripted it as a dict.
+    ffprobe output was bytes, so json.loads could never have worked either.
+  - The CLI hardcoded DataConverter, making 10 converter classes unreachable;
+    a PNG was routed through the JSON/CSV text converter.
+  - PRIORITY sorted descending while specialists used low numbers, so
+    find_converter('tiff','png') returned GISConverter, not ImageConverter.
+  - resize_image()/thumbnail() defaulted the output to the input path and
+    destroyed the source file.
+  - CSV was written by joining values with a comma - no quoting, no escaping -
+    and column names were taken from the first record only.
+  - SQLite -> SQL emitted column names with no types and unescaped literals.
+  - torch.load(weights_only=False) executed arbitrary code from any .pt file.
+  - The README's headline example raised ImportError.
 
-# Python API
-from universal_converter import (
-    convert, convert_file, resize_image,
-    encode_base64, decode_hex, convert_color,
-    csv_to_excel, text_to_qr, image_to_text,
-    upload_to_s3, generate_key_pair, fasta_to_dict
-)
+Removed (advertised without an implementation)
+  - 33 pairs: bam/cram/sam/bcf/bigbed, h5/tflite model formats, shapefiles.
+  - PDBConverter, which unconditionally returned failure.
+  - 4 no-op alias subclasses that registered as duplicate converters.
+  - 20 of 24 optional-dependency groups: 51 of 55 declared packages were
+    imported nowhere.
 
-# CLI
-universal-convert input.json -t csv -o output.csv
-
-================================================================================
-KEY FEATURES
-================================================================================
-
-✓ 100+ conversion functions
-✓ Optional dependencies (no auto-install on import)
-✓ Safe temp file management
-✓ Helpful error messages with install instructions
-✓ Simple Python API
-✓ Command line interface
-✓ Batch conversion support
-✓ OS-neutral (Windows, Mac, Linux)
-
-================================================================================
-INSTALLATION
-================================================================================
-
-# Core (no dependencies)
-pip install universal-converter
-
-# Specific features
-pip install universal-converter[images]     # Image conversions
-pip install universal-converter[audio]       # Audio conversions
-pip install universal-converter[video]       # Video conversions
-pip install universal-converter[cloud]       # Cloud storage
-pip install universal-converter[ai]         # AI/NLP features
-pip install universal-converter[all]        # All features
-
-================================================================================
-ARCHITECTURE IMPROVEMENTS
-================================================================================
-
-1. Removed auto-install on import (security fix)
-   - No more silent pip install calls
-   - Helpful DependencyError with installation instructions
-
-2. Optional dependency groups in pyproject.toml
-   - images, audio, video, cloud, ai, etc.
-   - Users only install what they need
-
-3. Safe temp file management
-   - contextmanager for guaranteed cleanup
-   - Prevents temp file leaks
-
-4. Proper error handling
-   - ConversionError for conversion failures
-   - DependencyError for missing packages
-
-5. Type annotations added
-
-================================================================================
-PUBLISH TO PYPI
-================================================================================
-
-# Build
-cd ~/Desktop/projects
-python -m build
-
-# Upload (requires PyPI account)
-twine upload dist/*
-
-# After publish
-pip install universal-converter
-
-# With specific features
-pip install universal-converter[images]
-
+Added
+  - Multi-hop BFS routing with --route, and automatic chaining on conversion.
+  - --doctor capability audit.
+  - Registry-driven dispatch, --from/--to overrides, --direct, exit codes.
+  - tests/ (78 tests) and a CI job that runs them on 3.9-3.13.
 ================================================================================

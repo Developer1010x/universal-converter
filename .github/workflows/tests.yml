@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 72 of the 198 pairs are ffmpeg-backed; without the binary those tests
+      # skip themselves and the media half goes untested.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install package
+        run: pip install -e ".[all,dev]"
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Capability audit
+        run: universal-convert --doctor
+
+  core-only:
+    # The core advertises zero dependencies; this proves it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install without any extra
+        run: pip install -e .
+      - name: Import and list conversions
+        run: |
+          python -c "import universal_converter; print(universal_converter.__version__)"
+          universal-convert --list
+          universal-convert --route csv pdf

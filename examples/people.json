@@ -1,0 +1,5 @@
+[
+  {"name": "Ada, Lovelace", "field": "computing", "tags": ["math", "first programmer"], "year": 1843},
+  {"name": "Grace \"Amazing\" Hopper", "field": "compilers", "tags": ["COBOL"], "year": 1959, "note": "this key only exists on one record"},
+  {"name": "Radia Perlman", "field": "networking", "tags": ["spanning tree"], "year": 1985}
+]

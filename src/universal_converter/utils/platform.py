@@ -1,29 +1,37 @@
-"""Platform utilities for finding executables"""
+"""Platform utilities for locating and running external tools."""
 
-import os
 import shutil
 import subprocess
-from typing import Optional, List
+from typing import List, Optional
 
 
 def find_executable(name: str) -> Optional[str]:
-    """Find an executable in system PATH"""
+    """Return the absolute path of ``name`` on PATH, or ``None``."""
     return shutil.which(name)
 
 
-def run_command(cmd: List[str], timeout: int = 300, capture_output: bool = True) -> subprocess.CompletedProcess:
-    """Run a command with timeout"""
+def run_command(
+    cmd: List[str], timeout: int = 300, capture_output: bool = True
+) -> subprocess.CompletedProcess:
+    """Run ``cmd`` and return the :class:`subprocess.CompletedProcess`.
+
+    ``text=True`` is always passed so ``.stdout``/``.stderr`` are ``str`` and
+    can be parsed directly (for example with :func:`json.loads`) rather than
+    coming back as ``bytes``.
+    """
     return subprocess.run(
         cmd,
         timeout=timeout,
         capture_output=capture_output,
-        check=False
+        text=True,
+        check=False,
     )
 
 
 def get_platform_info() -> dict:
-    """Get platform information"""
+    """Return a dict describing the host platform."""
     import platform
+
     return {
         'system': platform.system(),
         'release': platform.release(),

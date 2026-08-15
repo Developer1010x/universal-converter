@@ -1,201 +1,214 @@
-"""Cloud storage and format conversion module"""
+"""Infrastructure and configuration converters (Terraform, JSON/YAML/TOML/env)."""
 
+import json
+import re
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from . import BaseConverter, ConversionTask, ConversionResult
+from . import BaseConverter, ConversionResult, ConversionTask
+
+_YAML_HINT = "PyYAML required. Install: pip install universal-converter[data]"
+_TOML_WRITE_HINT = "tomli-w required. Install: pip install universal-converter[toml]"
+
+
+def _load_toml(content: str) -> Dict[str, Any]:
+    """Parse TOML with the stdlib reader on 3.11+, falling back to tomli."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10 and older
+        import tomli as tomllib  # type: ignore[no-redef]
+    return tomllib.loads(content)
+
+
+def _load_yaml_module():
+    try:
+        import yaml
+    except ImportError as exc:
+        raise ImportError(_YAML_HINT) from exc
+    return yaml
 
 
 class CloudConverter(BaseConverter):
-    """Converter for cloud storage formats and configurations"""
-    
+    """Converter for infrastructure configuration formats.
+
+    Handles the config-file square (JSON / YAML / TOML / .env) plus a
+    regex-level reader for Terraform ``.tf`` and ``.tfvars`` files. The
+    Terraform parsing is intentionally shallow: it lifts top-level resource
+    blocks and variable assignments, not the full HCL grammar.
+    """
+
     SUPPORTED_CONVERSIONS = {
-        "tf": ["json", "hcl", "yaml"],
+        "tf": ["json"],
         "tfvars": ["json", "env"],
         "json": ["yaml", "toml", "env"],
-        "yaml": ["json", "toml", "toml"],
-        "toml": ["json", "yaml"],
+        "yaml": ["json", "toml", "env"],
+        "toml": ["json", "yaml", "env"],
         "env": ["json", "yaml"],
     }
-    PRIORITY = 20
-    
+    PRIORITY = 30
+    REQUIRES_PYTHON = ["yaml"]
+
+    @classmethod
+    def requirements_for(cls, source_format: str, target_format: str) -> List[str]:
+        needed: List[str] = []
+        if "yaml" in (source_format.lower(), target_format.lower()):
+            needed.append("yaml")
+        if target_format.lower() == "toml":
+            needed.append("tomli_w")
+        return needed
+
     def convert(self, task: ConversionTask) -> ConversionResult:
         source = task.source_format.lower()
         target = task.target_format.lower()
-        
+
         try:
-            if source == "tf" and target in ["json", "hcl"]:
+            if source == "tf" and target == "json":
                 return self._tf_convert(task)
-            elif source == "tfvars":
+            if source == "tfvars" and target in ("json", "env"):
                 return self._tfvars_convert(task)
-            elif source in ["json", "yaml", "toml", "env"]:
+            if source in ("json", "yaml", "toml", "env"):
                 return self._config_convert(task)
-            
-            return ConversionResult(success=False, error=f"Unsupported: {source} → {target}")
-        except Exception as e:
-            return ConversionResult(success=False, error=str(e))
-    
+
+            return ConversionResult(
+                success=False, error=f"Unsupported: {source} -> {target}"
+            )
+        except Exception as exc:
+            return ConversionResult(success=False, error=str(exc))
+
+    # --- terraform -------------------------------------------------------
+
     def _tf_convert(self, task: ConversionTask) -> ConversionResult:
-        content = task.source_path.read_text()
-        
-        if task.target_format == "json":
-            import json
-            parsed = self._parse_terraform(content)
-            task.target_path.write_text(json.dumps(parsed, indent=2))
-        else:
-            task.target_path.write_text(content)
-        
-        return ConversionResult(success=True, output_path=str(task.target_path))
-    
-    def _parse_terraform(self, content: str) -> Dict:
-        import re
-        result = {}
-        resources = re.findall(r'resource\s+"([^"]+)"\s+"([^"]+)"\s*\{([^}]+)\}', content)
-        
-        for res_type, res_name, res_body in resources:
-            if res_type not in result:
-                result[res_type] = {}
-            result[res_type][res_name] = self._parse_block(res_body)
-        
+        content = Path(task.source_path).read_text(encoding="utf-8")
+        parsed = self._parse_terraform(content)
+        Path(task.target_path).write_text(
+            json.dumps(parsed, indent=2), encoding="utf-8"
+        )
+        return ConversionResult(
+            success=True,
+            output_path=str(task.target_path),
+            metadata={"resource_types": list(parsed)},
+        )
+
+    def _parse_terraform(self, content: str) -> Dict[str, Any]:
+        result: Dict[str, Any] = {}
+        for res_type, res_name, body in re.findall(
+            r'resource\s+"([^"]+)"\s+"([^"]+)"\s*\{([^}]*)\}', content
+        ):
+            result.setdefault(res_type, {})[res_name] = self._parse_block(body)
         return result
-    
-    def _parse_block(self, block: str) -> Dict:
-        import re
-        result = {}
-        for line in block.split('\n'):
-            match = re.match(r'\s*(\w+)\s*=\s*(.+)', line)
+
+    @staticmethod
+    def _parse_block(block: str) -> Dict[str, str]:
+        result: Dict[str, str] = {}
+        for line in block.splitlines():
+            match = re.match(r'\s*(\w+)\s*=\s*(.+?)\s*$', line)
             if match:
-                key, value = match.groups()
-                result[key] = value.strip('"')
+                result[match.group(1)] = match.group(2).strip().strip('"')
         return result
-    
+
     def _tfvars_convert(self, task: ConversionTask) -> ConversionResult:
-        content = task.source_path.read_text()
-        
-        if task.target_format == "json":
-            import json
-            parsed = self._parse_tfvars(content)
-            task.target_path.write_text(json.dumps(parsed, indent=2))
-        elif task.target_format == "env":
-            parsed = self._parse_tfvars(content)
-            lines = [f"{k}={v}" for k, v in parsed.items()]
-            task.target_path.write_text("\n".join(lines))
+        content = Path(task.source_path).read_text(encoding="utf-8")
+        parsed = self._parse_tfvars(content)
+
+        if task.target_format.lower() == "json":
+            Path(task.target_path).write_text(
+                json.dumps(parsed, indent=2), encoding="utf-8"
+            )
         else:
-            task.target_path.write_text(content)
-        
+            Path(task.target_path).write_text(
+                "\n".join(f"{k}={v}" for k, v in parsed.items()) + "\n",
+                encoding="utf-8",
+            )
         return ConversionResult(success=True, output_path=str(task.target_path))
-    
-    def _parse_tfvars(self, content: str) -> Dict[str, str]:
-        import re
-        result = {}
-        for line in content.split('\n'):
+
+    @staticmethod
+    def _parse_tfvars(content: str) -> Dict[str, str]:
+        result: Dict[str, str] = {}
+        for line in content.splitlines():
             match = re.match(r'\s*(\w+)\s*=\s*"([^"]*)"', line)
             if match:
                 result[match.group(1)] = match.group(2)
         return result
-    
+
+    # --- config square ---------------------------------------------------
+
     def _config_convert(self, task: ConversionTask) -> ConversionResult:
-        import json
-        import yaml
-        
-        content = task.source_path.read_text()
-        
-        if task.source_format == "json":
+        content = Path(task.source_path).read_text(encoding="utf-8")
+        source = task.source_format.lower()
+        target = task.target_format.lower()
+
+        if source == "json":
             data = json.loads(content)
-        elif task.source_format == "yaml":
-            data = yaml.safe_load(content)
-        elif task.source_format == "env":
+        elif source == "yaml":
+            # safe_load_all so multi-document manifests (Kubernetes, Helm
+            # output) survive; a single document unwraps back to a mapping.
+            documents = list(_load_yaml_module().safe_load_all(content))
+            data = documents[0] if len(documents) == 1 else documents
+        elif source == "env":
             data = self._parse_env(content)
-        elif task.source_format == "toml":
-            try:
-                import tomli
-                data = tomli.loads(content)
-            except ImportError:
-                return ConversionResult(
-                    success=False,
-                    error="tomli required. Install: pip install universal-converter[cloud]"
-                )
         else:
-            return ConversionResult(success=False, error="Unknown source format")
-        
-        if task.target_format == "json":
-            task.target_path.write_text(json.dumps(data, indent=2))
-        elif task.target_format == "yaml":
-            task.target_path.write_text(yaml.dump(data))
-        elif task.target_format == "toml":
+            data = _load_toml(content)
+
+        if target == "json":
+            rendered = json.dumps(data, indent=2, default=str)
+        elif target == "yaml":
+            yaml = _load_yaml_module()
+            if isinstance(data, list):
+                rendered = yaml.safe_dump_all(data, sort_keys=False, default_flow_style=False)
+            else:
+                rendered = yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
+        elif target == "toml":
             try:
                 import tomli_w
-                task.target_path.write_text(tomli_w.dumps(data))
             except ImportError:
+                return ConversionResult(success=False, error=_TOML_WRITE_HINT)
+            if not isinstance(data, dict):
                 return ConversionResult(
-                    success=False,
-                    error="tomli-w required. Install: pip install universal-converter[cloud]"
+                    success=False, error="TOML output requires a mapping at the top level"
                 )
-        elif task.target_format == "env":
-            lines = [f"{k}={v}" for k, v in self._flatten_dict(data).items()]
-            task.target_path.write_text("\n".join(lines))
-        
+            rendered = tomli_w.dumps(data)
+        else:
+            flat = self._flatten_dict(data if isinstance(data, dict) else {"root": data})
+            rendered = "\n".join(f"{k}={v}" for k, v in flat.items()) + "\n"
+
+        Path(task.target_path).write_text(rendered, encoding="utf-8")
         return ConversionResult(success=True, output_path=str(task.target_path))
-    
-    def _parse_env(self, content: str) -> Dict:
-        result = {}
-        for line in content.split('\n'):
-            line = line.strip()
-            if line and not line.startswith('#'):
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    result[key.strip()] = value.strip().strip('"')
+
+    @staticmethod
+    def _parse_env(content: str) -> Dict[str, str]:
+        result: Dict[str, str] = {}
+        for raw in content.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            result[key.strip().removeprefix("export ").strip()] = (
+                value.strip().strip('"').strip("'")
+            )
         return result
-    
-    def _flatten_dict(self, d: Dict, parent_key: str = '', sep: str = '_') -> Dict:
+
+    def _flatten_dict(
+        self, data: Dict, parent_key: str = "", sep: str = "_"
+    ) -> Dict[str, Any]:
         items = []
-        for k, v in d.items():
-            new_key = f"{parent_key}{sep}{k}" if parent_key else k
-            if isinstance(v, dict):
-                items.extend(self._flatten_dict(v, new_key, sep=sep).items())
+        for key, value in data.items():
+            new_key = f"{parent_key}{sep}{key}" if parent_key else str(key)
+            if isinstance(value, dict):
+                items.extend(self._flatten_dict(value, new_key, sep=sep).items())
+            elif isinstance(value, (list, tuple)):
+                items.append((new_key, json.dumps(list(value), default=str)))
             else:
-                items.append((new_key, v))
+                items.append((new_key, value))
         return dict(items)
-    
-    def convert_format(self, path: str, to_format: str, output: Optional[str] = None) -> ConversionResult:
+
+    def convert_format(
+        self, path: str, to_format: str, output: Optional[str] = None
+    ) -> ConversionResult:
+        """Convert a configuration file to ``to_format``."""
         task = ConversionTask(
             source_path=Path(path),
             target_path=Path(output or Path(path).with_suffix(f".{to_format}")),
             source_format=Path(path).suffix[1:],
-            target_format=to_format
+            target_format=to_format,
         )
         return self.convert(task)
-
-
-class TerraformConverter(CloudConverter):
-    """Alias for Terraform-specific conversions"""
-    pass
-
-
-class KubernetesConverter(BaseConverter):
-    """Converter for Kubernetes manifests"""
-    
-    SUPPORTED_CONVERSIONS = {
-        "yaml": ["json", "helm"],
-        "json": ["yaml"],
-    }
-    PRIORITY = 15
-    
-    def convert(self, task: ConversionTask) -> ConversionResult:
-        import yaml
-        import json
-        
-        try:
-            with open(task.source_path) as f:
-                data = list(yaml.safe_load_all(f))
-            
-            if task.target_format == "json":
-                output = json.dumps(data, indent=2)
-                task.target_path.write_text(output)
-            else:
-                with open(task.target_path, 'w') as f:
-                    yaml.dump_all(data, f, default_flow_style=False)
-            
-            return ConversionResult(success=True, output_path=str(task.target_path))
-        except Exception as e:
-            return ConversionResult(success=False, error=str(e))
