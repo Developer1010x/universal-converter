@@ -1,14 +1,26 @@
-"""Audio conversion module"""
+"""Audio conversion module (ffmpeg-backed)."""
 
 from pathlib import Path
 from typing import Optional
 
-from . import BaseConverter, ConversionTask, ConversionResult, DependencyError
+from . import BaseConverter, ConversionTask, ConversionResult
+
+_FFMPEG_HINT = (
+    "The ffmpeg binary was not found on PATH. It is a system package, not a "
+    "Python one: apt install ffmpeg / brew install ffmpeg / winget install ffmpeg"
+)
+
+
+def _tail(text: Optional[str], lines: int = 6) -> str:
+    """Return the last few lines of ffmpeg's stderr, which hold the real error."""
+    if not text:
+        return "conversion failed"
+    return "\n".join(text.strip().splitlines()[-lines:])
 
 
 class AudioConverter(BaseConverter):
-    """Converter for audio formats"""
-    
+    """Converter for audio formats. Requires the ``ffmpeg`` binary on PATH."""
+
     SUPPORTED_CONVERSIONS = {
         "mp3": ["wav", "flac", "ogg", "aac", "m4a"],
         "wav": ["mp3", "flac", "ogg", "aac", "m4a"],
@@ -19,57 +31,61 @@ class AudioConverter(BaseConverter):
     }
     PRIORITY = 20
     REQUIRES_EXTERNAL = ["ffmpeg"]
-    
+
     def convert(self, task: ConversionTask) -> ConversionResult:
         from ..utils.platform import find_executable, run_command
-        
+
         if not find_executable("ffmpeg"):
-            return ConversionResult(
-                success=False,
-                error="FFmpeg required. Install: pip install universal-converter[audio]"
-            )
-        
+            return ConversionResult(success=False, error=_FFMPEG_HINT)
+
         cmd = [
             "ffmpeg", "-y",
             "-i", str(task.source_path),
-            str(task.target_path)
+            str(task.target_path),
         ]
-        
-        result = run_command(cmd)
-        
-        if result["returncode"] == 0:
+
+        try:
+            result = run_command(cmd)
+        except Exception as exc:  # timeout, OSError, ...
+            return ConversionResult(success=False, error=f"ffmpeg failed: {exc}")
+
+        if result.returncode == 0:
             return ConversionResult(
                 success=True,
-                output_path=str(task.target_path)
+                output_path=str(task.target_path),
+                metadata={"tool": "ffmpeg"},
             )
-        return ConversionResult(success=False, error=result.get("stderr", "Conversion failed"))
-    
-    def convert_format(self, path: str, to_format: str, output: Optional[str] = None) -> ConversionResult:
-        """Convert audio to a specific format"""
+        return ConversionResult(success=False, error=_tail(result.stderr))
+
+    def convert_format(
+        self, path: str, to_format: str, output: Optional[str] = None
+    ) -> ConversionResult:
+        """Convert an audio file to ``to_format``."""
         task = ConversionTask(
             source_path=Path(path),
             target_path=Path(output or Path(path).with_suffix(f".{to_format}")),
             source_format=Path(path).suffix[1:],
-            target_format=to_format
+            target_format=to_format,
         )
         return self.convert(task)
-    
-    def extract_audio(self, video_path: str, output: Optional[str] = None, format: str = "mp3") -> ConversionResult:
-        """Extract audio from video file"""
-        from ..utils.platform import find_executable
-        
+
+    def extract_audio(
+        self, video_path: str, output: Optional[str] = None, format: str = "mp3"
+    ) -> ConversionResult:
+        """Strip the video stream and keep the audio track."""
+        from ..utils.platform import find_executable, run_command
+
         if not find_executable("ffmpeg"):
-            return ConversionResult(
-                success=False,
-                error="FFmpeg required. Install: pip install universal-converter[video]"
-            )
-        
+            return ConversionResult(success=False, error=_FFMPEG_HINT)
+
         out_path = output or str(Path(video_path).with_suffix(f".{format}"))
-        cmd = ["ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "libmp3lame", out_path]
-        
-        from ..utils.platform import run_command
-        result = run_command(cmd)
-        
-        if result["returncode"] == 0:
+        cmd = ["ffmpeg", "-y", "-i", str(video_path), "-vn", out_path]
+
+        try:
+            result = run_command(cmd)
+        except Exception as exc:
+            return ConversionResult(success=False, error=f"ffmpeg failed: {exc}")
+
+        if result.returncode == 0:
             return ConversionResult(success=True, output_path=out_path)
-        return ConversionResult(success=False, error=result.get("stderr", "Extraction failed"))
+        return ConversionResult(success=False, error=_tail(result.stderr))

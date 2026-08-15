@@ -1,142 +1,224 @@
 # Universal Converter
 
-A comprehensive Python library for converting between file formats, data types, and domain-specific formats.
+A file-conversion library whose converters are a **graph**, not a lookup table.
+198 format pairs are implemented directly; another 234 are reached by chaining
+converters automatically, so `csv → pdf` works even though nothing implements
+it — the registry routes it through `html`.
 
-## Overview
+```console
+$ universal-convert cities.csv -t pdf
+converted cities.pdf  via csv -> html -> pdf
+```
 
-Universal Converter provides a unified interface for hundreds of conversion operations across multiple domains:
+Every number in this README is printed by a command you can run:
+`universal-convert --list` for the pairs, `universal-convert --doctor` for what
+works in *your* environment.
 
-- **Data formats**: JSON, CSV, XML, YAML, TOML, Parquet
-- **Documents**: PDF, DOCX, Markdown, HTML, RTF
-- **Media**: Images (PNG, JPG, WebP, TIFF), Audio (MP3, WAV, FLAC), Video (MP4, AVI, MKV)
-- **Scientific**: Bioinformatics (FASTA, FASTQ, GenBank, VCF), GIS (GeoJSON, Shapefile, KML)
-- **ML/AI**: PyTorch, ONNX, TensorFlow, Keras model formats
-- **Infrastructure**: Terraform, Kubernetes manifests, cloud configs
+---
 
-## Installation
+## Install
 
 ```bash
-pip install universal-converter
+pip install universal-converter          # core: 65 pairs, zero dependencies
+pip install "universal-converter[all]"   # 126 pairs, everything except torch
+                                         # + 72 more once ffmpeg is on PATH
 ```
 
-Install with specific extras for additional features:
+The core has **no dependencies**. Extras are per-capability, and each one is
+imported by code in `src/` — nothing is declared that is not used:
+
+| extra | packages | unlocks |
+|---|---|---|
+| `data` | PyYAML | YAML reading and writing |
+| `toml` | tomli-w (+ tomli on <3.11) | TOML output |
+| `images` | Pillow | PNG/JPG/GIF/BMP/TIFF/WebP, resize, thumbnails |
+| `docx` | python-docx | Word documents |
+| `pdf` | pypdf, reportlab | PDF reading and writing |
+| `xlsx` | openpyxl | Excel workbooks |
+| `torch` | torch, onnx | PyTorch → ONNX export (large; not in `all`) |
+
+**Audio and video need the `ffmpeg` binary on `PATH`** — a system package, not a
+pip one. `apt install ffmpeg`, `brew install ffmpeg`, or `winget install ffmpeg`.
+`--doctor` tells you if it is missing.
+
+## Command line
+
+Both `universal-convert` and `python -m universal_converter` work.
 
 ```bash
-pip install universal-converter[images]    # Image processing
-pip install universal-converter[audio]     # Audio conversion
-pip install universal-converter[video]     # Video conversion
-pip install universal-converter[ai]         # ML model conversion
-pip install universal-converter[database]  # Database formats
-pip install universal-converter[all]       # All features
+# Target format from -t, or inferred from the output path
+universal-convert data.json -t csv
+universal-convert data.json -o report.html
+
+# Multi-hop happens automatically and is reported
+universal-convert database.sqlite -t md
+# converted database.md  via sqlite -> csv -> md
+
+# Plan a route without running it
+universal-convert --route csv pdf
+# csv -> html -> pdf  (2 hops)
+#   1.      csv -> html     DataConverter        ok
+#   2.     html -> pdf      DocumentConverter    ok
+
+# Require a single converter
+universal-convert data.json -t pdf --direct
+
+# What works here, right now
+universal-convert --doctor
+universal-convert --list
 ```
 
-## Architecture
+### Try it on the bundled samples
 
-The library follows a modular, plugin-based architecture:
+`examples/` holds one small real input per converter family:
 
-```
-universal_converter/
-├── converters/          # Format-specific converters
-│   ├── data.py         # JSON, CSV, XML, YAML
-│   ├── images.py       # Image formats
-│   ├── audio.py        # Audio formats
-│   ├── video.py        # Video formats
-│   ├── documents.py    # Document formats
-│   ├── ai.py          # ML model formats
-│   ├── cloud.py        # Cloud configs
-│   ├── bioinformatics.py
-│   ├── gis.py
-│   ├── network.py
-│   └── database.py
-├── registry.py         # Converter discovery & capability lookup
-└── utils/
-    └── platform.py     # System utilities
+```bash
+universal-convert examples/people.json   -o /tmp/people.html   # records -> styled table
+universal-convert examples/people.json   -o /tmp/people.md     # records -> markdown table
+universal-convert examples/cities.csv    -o /tmp/cities.pdf    # routed via html
+universal-convert examples/notes.md      -o /tmp/notes.docx
+universal-convert examples/places.geojson -o /tmp/places.kml
+universal-convert examples/sequences.fasta -o /tmp/seqs.fastq
 ```
 
-All converters inherit from `BaseConverter` and implement a consistent interface.
+`--doctor` walks every registered pair, checks whether its Python imports
+resolve and its external binaries are on `PATH`, and prints how many pairs each
+missing package would unlock:
 
-## Usage
+```
+  converter                prio  pairs  ready  status
+  ImageConverter             10     30     30  all dependencies present
+  DocumentConverter          20     12      8  missing reportlab (x4)
+  ...
+  184/198 conversion pairs are runnable in this environment
 
-### Python API
+  install to unlock:
+    reportlab                  4 pairs   pip install universal-converter[pdf]
+```
+
+## Python API
 
 ```python
-from universal_converter import convert_file, resize_image
+from universal_converter import convert_file, can_convert, plan_route
 
-# Convert between data formats
-convert_file('data.json', 'output.xml')
+convert_file('data.json', 'report.html')          # direct
+convert_file('notes.md', 'notes.pdf')             # direct
+convert_file('cities.csv', 'cities.pdf')          # routed through html
 
-# Resize an image
-resize_image('photo.png', 'thumb.png', width=200)
+can_convert('json', 'csv')                        # -> True  (direct only)
+plan_route('csv', 'pdf')                          # -> [csv->html, html->pdf]
+```
 
-# Access specific converters directly
+Concrete converters are importable and lazy — importing one does not import the
+others, or their dependencies:
+
+```python
 from universal_converter.converters import DataConverter, ImageConverter
 
-converter = DataConverter()
-result = converter.convert(task)
+ImageConverter().convert_format('photo.png', 'webp')
+ImageConverter().resize('photo.png', width=200)    # -> photo_resized.png
 ```
 
-### Discovering conversions (registry)
+`resize`/`thumbnail` write to `<name>_resized.<ext>` / `<name>_thumb.<ext>`.
+They never default to the input path.
 
-The package ships a dependency-free registry that auto-discovers every
-converter and answers capability questions without importing heavy optional
-dependencies:
+### The registry
 
 ```python
-from universal_converter import (
-    can_convert, find_converter, list_conversions, detect_format,
-)
+from universal_converter import get_registry
 
-# Is a conversion supported?
-can_convert('json', 'csv')          # -> True
-
-# Which converter class handles a pair?
-find_converter('json', 'html')      # -> <class 'DataConverter'>
-
-# Infer the canonical format from a path (handles aliases like .yml -> yaml)
-detect_format('config.YML')         # -> 'yaml'
-
-# Full {source: [targets...]} capability map across all converters
-conversions = list_conversions()
+registry = get_registry()
+registry.find_converter('tiff', 'png')        # -> <class 'ImageConverter'>
+registry.targets_for('json')                  # one hop
+registry.reachable_from('json', max_hops=2)   # {'csv': 1, ..., 'pdf': 2}
+registry.find_route('csv', 'pdf')             # [RouteStep(...), RouteStep(...)]
 ```
 
-The same data backs the CLI's `--list` output. For finer control use the
-`ConverterRegistry` class directly (e.g. `registry.targets_for('json')`).
+Discovery walks `converters/`, collects every concrete `BaseConverter`, and
+orders them by `PRIORITY` — **lower wins**, so `ImageConverter` (10) beats the
+generic `DataConverter` (50) for a pair both declare. Importing the registry
+pulls in no optional dependency: converter modules keep heavy imports inside
+methods.
 
-### Command Line
+## How routing works
+
+`supported_conversions()` is a `{source: [targets]}` adjacency map. `find_route`
+runs breadth-first search over it, so the first path found has the fewest hops.
+Intermediate files are written to a temporary directory and cleaned up; only the
+final step touches the destination.
+
+```
+csv ──DataConverter──▶ html ──DocumentConverter──▶ pdf
+```
+
+Routing prefers paths whose converters have their dependencies satisfied, so it
+will not propose a chain that is going to die on a missing import.
+
+## Supported conversions
+
+Run `universal-convert --list` for the authoritative map. Summary:
+
+| Converter | Pairs | Formats | Needs |
+|---|---:|---|---|
+| `ImageConverter` | 30 | png, jpg, gif, bmp, tiff, webp | Pillow |
+| `VideoConverter` | 42 | mp4, avi, mkv, mov, webm, flv, wmv | ffmpeg binary |
+| `AudioConverter` | 30 | mp3, wav, flac, ogg, aac, m4a | ffmpeg binary |
+| `DataConverter` | 29 | json, csv, tsv, xml, yaml, txt, html, md | PyYAML for yaml |
+| `CloudConverter` | 14 | tf, tfvars, json, yaml, toml, env | PyYAML, tomli-w |
+| `DocumentConverter` | 12 | pdf, docx, txt, md, html | pypdf, reportlab, python-docx |
+| `DatabaseConverter` | 12 | sqlite, db, sql, xlsx | openpyxl for xlsx |
+| `BioinformaticsConverter` | 11 | fasta, fastq, genbank, bed, vcf | — |
+| `GISConverter` | 9 | geojson, kml, gpx, csv | — |
+| `NetworkConverter` | 7 | html, md, txt, url | — |
+| `AIConverter` | 2 | pt/pth → onnx | torch, onnx |
+
+### What this does not do
+
+Fidelity is text-level, and the README would rather say so than let you find
+out:
+
+- **Documents** carry paragraphs and heading levels across `docx`/`md`/`html`/
+  `pdf`/`txt`. Styling, images, tables and layout do not survive. For real
+  layout fidelity use LibreOffice or pandoc.
+- **Terraform** parsing is regex-level: top-level `resource` blocks and
+  `.tfvars` assignments, not the HCL grammar.
+- **Shapefiles** are not supported. They need GDAL/fiona, which pip cannot
+  reliably install; GeoJSON/KML/GPX are handled with the standard library.
+- **`pt → onnx`** refuses to unpickle a checkpoint unless you pass
+  `options={"trust_pickle": True}`. `torch.load(weights_only=False)` executes
+  code from the file. TorchScript archives load without the opt-in.
+- Removed in 1.1.0 because they were advertised without an implementation:
+  bam/cram/sam/bcf/bigbed, h5/tflite model formats, shapefiles, and the
+  `PDBConverter` stub.
+
+## Design
+
+1. **The registry decides, not the caller.** `convert_file` and the CLI resolve
+   the pair through the registry; no converter class is hardcoded anywhere.
+2. **Lazy everything.** Optional imports live inside methods, so the core works
+   without them and `--list` never silently shrinks because a module failed to
+   import — `--doctor` reports the failure instead.
+3. **Advertise only what runs.** A test walks every pair in the registry and
+   fails if any converter answers "unsupported".
+4. **Actionable errors.** Every dependency message names an extra that exists.
+
+## Development
 
 ```bash
-# Convert a file
-python -m universal_converter input.json -t csv -o output.csv
-
-# List all supported conversions (generated from the registry)
-python -m universal_converter -l
+git clone https://github.com/Developer1010x/universal-converter
+cd universal-converter
+pip install -e ".[all,dev]"
+pytest                       # 78 tests
 ```
 
-## Supported Formats
-
-| Category | Formats |
-|----------|---------|
-| Data | json, csv, xml, yaml, toml, parquet |
-| Images | png, jpg, gif, bmp, tiff, webp |
-| Audio | mp3, wav, flac, ogg, aac, m4a |
-| Video | mp4, avi, mkv, mov, webm |
-| Documents | pdf, docx, txt, html, md |
-| ML Models | pt, h5, onnx, tflite, pkl |
-| Bioinformatics | fasta, fastq, genbank, vcf, bed |
-| GIS | shp, geojson, kml, gpx, tif |
-| Database | sqlite, sql, xlsx |
-
-## Design Principles
-
-1. **Lazy loading**: Converters are loaded on-demand to minimize startup time
-2. **Optional dependencies**: Heavy dependencies are optional; the core works without them
-3. **Clear error messages**: Missing dependencies return actionable installation instructions
-4. **Type hints**: Full type annotations for IDE support
+The suite is round-trip based: `json → csv → json`, `fasta → fastq → fasta`,
+`geojson → kml → geojson`, `md → html → md`. Generated SQL is verified by
+replaying it into an in-memory SQLite. Media tests skip themselves when `ffmpeg`
+is absent.
 
 ## Requirements
 
-- Python 3.9+
-- Core dependencies installed automatically
+Python 3.9+. Core has no dependencies.
 
 ## License
 

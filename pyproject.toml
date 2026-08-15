@@ -1,12 +1,13 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "universal-converter"
-version = "1.0.0"
-description = "Convert anything to anything - comprehensive file format conversion library"
+version = "1.1.0"
+description = "Registry-driven file format conversion with multi-hop routing"
 readme = "README.md"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "Prajwall Narayana", email = "sprajwalln.cs21@rvce.edu.in"}
@@ -17,234 +18,55 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+# The core (JSON/CSV/TSV/XML/HTML/Markdown, GeoJSON/KML/GPX, FASTA/FASTQ/
+# GenBank/BED/VCF, SQLite, Terraform, .env) runs on the standard library alone.
 dependencies = []
 
+# Every package below is imported by code in src/. `universal-convert --doctor`
+# reports which of them are present and exactly how many conversions each one
+# unlocks.
 [project.optional-dependencies]
-# Core conversions (no heavy dependencies)
-core = []
+# YAML reading and writing (universal_converter.converters.data, .cloud)
+data = ["PyYAML>=6.0"]
 
-# Image processing
-images = [
-    "pillow",
-    "cairosvg",
-    "pytesseract",
-]
+# TOML: reading uses stdlib tomllib on 3.11+, writing always needs tomli-w
+toml = ["tomli-w>=1.0", "tomli>=2.0; python_version < '3.11'"]
 
-# PDF documents
-pdf = [
-    "PyPDF2",
-    "reportlab",
-    "pdf2image",
-]
+# Raster image conversion, resize and thumbnails
+images = ["Pillow>=9.0"]
 
 # Word documents
-word = [
-    "python-docx",
-]
+docx = ["python-docx>=1.0"]
 
-# Spreadsheets
-spreadsheets = [
-    "pandas",
-    "openpyxl",
-    "xlrd",
-    "pyarrow",
-]
+# PDF: pypdf reads, reportlab writes
+pdf = ["pypdf>=4.0", "reportlab>=4.0"]
 
-# Presentations
-presentations = [
-    "python-pptx",
-]
+# Excel workbooks
+xlsx = ["openpyxl>=3.1"]
 
-# Markdown/HTML
-markup = [
-    "markdown",
-    "weasyprint",
-    "beautifulsoup4",
-    "html2text",
-]
+# PyTorch -> ONNX model export (large download; excluded from `all`)
+torch = ["torch>=2.0", "onnx>=1.15"]
 
-# ODT
-odt = [
-    "odfpy",
-]
-
-# Audio processing
-audio = [
-    "pydub",
-    "SpeechRecognition",
-    "gtts",
-    "pyttsx3",
-]
-
-# Video processing
-video = [
-    "moviepy",
-]
-
-# Archives
-archives = [
-    "rarfile",
-    "pyzipper",
-]
-
-# Web/API
-web = [
-    "requests",
-    "xmltodict",
-]
-
-# Scientific data
-scientific = [
-    "numpy",
-    "scipy",
-    "h5py",
-]
-
-# Encryption/Security
-security = [
-    "qrcode",
-    "pyzbar",
-    "bcrypt",
-    "argon2",
-    "PyJWT",
-]
-
-# eBooks
-ebooks = [
-    "ebooklib",
-]
-
-# Units/Currency
-units = [
-    "pint",
-    "forex-python",
-]
-
-# AI/NLP
-ai = [
-    "sentence-transformers",
-    "tiktoken",
-    "openai-whisper",
-]
-
-# Cloud storage
-cloud = [
-    "boto3",
-    "google-cloud-storage",
-    "azure-storage-blob",
-]
-
-# Blockchain
-blockchain = [
-    "eth-account",
-    "web3",
-]
-
-# Bioinformatics
-bioinformatics = [
-    "biopython",
-]
-
-# CAD/Graphics
-cad = [
-    "ezdxf",
-    "trimesh",
-]
-
-# GIS/Geospatial
-gis = [
-    "geopandas",
-    "shapely",
-]
-
-# Fonts
-fonts = [
-    "fonttools",
-]
-
-# Networking
-networking = [
-    "scapy",
-]
-
-# Serialization
-serialization = [
-    "msgpack",
-    "protobuf",
-]
-
-# Email
-email = [
-    "extract-msg",
-]
-
-# All features
+# Everything except the multi-gigabyte torch stack
 all = [
-    "pillow",
-    "cairosvg",
-    "pytesseract",
-    "PyPDF2",
-    "reportlab",
-    "pdf2image",
-    "python-docx",
-    "pandas",
-    "openpyxl",
-    "xlrd",
-    "pyarrow",
-    "python-pptx",
-    "markdown",
-    "weasyprint",
-    "beautifulsoup4",
-    "html2text",
-    "odfpy",
-    "pydub",
-    "SpeechRecognition",
-    "gtts",
-    "pyttsx3",
-    "moviepy",
-    "rarfile",
-    "pyzipper",
-    "requests",
-    "xmltodict",
-    "numpy",
-    "scipy",
-    "h5py",
-    "qrcode",
-    "pyzbar",
-    "bcrypt",
-    "argon2",
-    "PyJWT",
-    "ebooklib",
-    "pint",
-    "forex-python",
-    "sentence-transformers",
-    "tiktoken",
-    "openai-whisper",
-    "boto3",
-    "google-cloud-storage",
-    "azure-storage-blob",
-    "eth-account",
-    "web3",
-    "biopython",
-    "ezdxf",
-    "trimesh",
-    "geopandas",
-    "shapely",
-    "fonttools",
-    "scapy",
-    "msgpack",
-    "protobuf",
-    "extract-msg",
+    "PyYAML>=6.0",
+    "tomli-w>=1.0",
+    "tomli>=2.0; python_version < '3.11'",
+    "Pillow>=9.0",
+    "python-docx>=1.0",
+    "pypdf>=4.0",
+    "reportlab>=4.0",
+    "openpyxl>=3.1",
 ]
 
-dev = ["pytest", "pytest-cov", "black", "flake8", "mypy"]
+dev = ["pytest>=7.0", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/Developer1010x/universal-converter"
