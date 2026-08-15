@@ -3,7 +3,7 @@
 A file-conversion library whose converters are a **graph**, not a lookup table.
 198 format pairs are implemented directly; another 234 are reached by chaining
 converters automatically, so `csv → pdf` works even though nothing implements
-it — the registry routes it through `html`.
+it, the registry routes it through `html`.
 
 ```console
 $ universal-convert cities.csv -t pdf
@@ -25,7 +25,7 @@ pip install "universal-converter[all]"   # 126 pairs, everything except torch
 ```
 
 The core has **no dependencies**. Extras are per-capability, and each one is
-imported by code in `src/` — nothing is declared that is not used:
+imported by code in `src/`, nothing is declared that is not used:
 
 | extra | packages | unlocks |
 |---|---|---|
@@ -37,7 +37,7 @@ imported by code in `src/` — nothing is declared that is not used:
 | `xlsx` | openpyxl | Excel workbooks |
 | `torch` | torch, onnx | PyTorch → ONNX export (large; not in `all`) |
 
-**Audio and video need the `ffmpeg` binary on `PATH`** — a system package, not a
+**Audio and video need the `ffmpeg` binary on `PATH`**, a system package, not a
 pip one. `apt install ffmpeg`, `brew install ffmpeg`, or `winget install ffmpeg`.
 `--doctor` tells you if it is missing.
 
@@ -109,7 +109,7 @@ can_convert('json', 'csv')                        # -> True  (direct only)
 plan_route('csv', 'pdf')                          # -> [csv->html, html->pdf]
 ```
 
-Concrete converters are importable and lazy — importing one does not import the
+Concrete converters are importable and lazy, importing one does not import the
 others, or their dependencies:
 
 ```python
@@ -130,12 +130,12 @@ from universal_converter import get_registry
 registry = get_registry()
 registry.find_converter('tiff', 'png')        # -> <class 'ImageConverter'>
 registry.targets_for('json')                  # one hop
-registry.reachable_from('json', max_hops=2)   # {'csv': 1, ..., 'pdf': 2}
+registry.reachable_from('json', max_hops=2)   # {'csv': 1..., 'pdf': 2}
 registry.find_route('csv', 'pdf')             # [RouteStep(...), RouteStep(...)]
 ```
 
 Discovery walks `converters/`, collects every concrete `BaseConverter`, and
-orders them by `PRIORITY` — **lower wins**, so `ImageConverter` (10) beats the
+orders them by `PRIORITY`, **lower wins**, so `ImageConverter` (10) beats the
 generic `DataConverter` (50) for a pair both declare. Importing the registry
 pulls in no optional dependency: converter modules keep heavy imports inside
 methods.
@@ -167,9 +167,9 @@ Run `universal-convert --list` for the authoritative map. Summary:
 | `CloudConverter` | 14 | tf, tfvars, json, yaml, toml, env | PyYAML, tomli-w |
 | `DocumentConverter` | 12 | pdf, docx, txt, md, html | pypdf, reportlab, python-docx |
 | `DatabaseConverter` | 12 | sqlite, db, sql, xlsx | openpyxl for xlsx |
-| `BioinformaticsConverter` | 11 | fasta, fastq, genbank, bed, vcf | — |
-| `GISConverter` | 9 | geojson, kml, gpx, csv | — |
-| `NetworkConverter` | 7 | html, md, txt, url | — |
+| `BioinformaticsConverter` | 11 | fasta, fastq, genbank, bed, vcf |, |
+| `GISConverter` | 9 | geojson, kml, gpx, csv |, |
+| `NetworkConverter` | 7 | html, md, txt, url |, |
 | `AIConverter` | 2 | pt/pth → onnx | torch, onnx |
 
 ### What this does not do
@@ -197,7 +197,7 @@ out:
    the pair through the registry; no converter class is hardcoded anywhere.
 2. **Lazy everything.** Optional imports live inside methods, so the core works
    without them and `--list` never silently shrinks because a module failed to
-   import — `--doctor` reports the failure instead.
+   import, `--doctor` reports the failure instead.
 3. **Advertise only what runs.** A test walks every pair in the registry and
    fails if any converter answers "unsupported".
 4. **Actionable errors.** Every dependency message names an extra that exists.
