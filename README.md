@@ -1,5 +1,7 @@
 # Universal Converter
 
+[![Tests](https://github.com/Developer1010x/universal-converter/actions/workflows/tests.yml/badge.svg)](https://github.com/Developer1010x/universal-converter/actions/workflows/tests.yml) [![PyPI](https://img.shields.io/pypi/v/universal-converter)](https://pypi.org/project/universal-converter/) [![License: MIT](https://img.shields.io/badge/License-MIT-2EA44F)](LICENSE) ![Python: 3](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)
+
 A file-conversion library whose converters are a **graph**, not a lookup table.
 198 format pairs are implemented directly; another 234 are reached by chaining
 converters automatically, so `csv → pdf` works even though nothing implements
@@ -227,3 +229,7 @@ MIT
 ## Repository
 
 https://github.com/Developer1010x/universal-converter
+
+---
+
+Built by **S. Prajwall Narayana** · [Portfolio](https://sprajwallnarayana.vercel.app) · [GitHub](https://github.com/Developer1010x)
